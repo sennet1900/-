@@ -93,35 +93,41 @@ export const autonomousScan = async (
   persona: Persona,
   engine: EngineConfig,
   isOriginal: boolean = false
-): Promise<{ textSelection: string; comment: string; topic: string } | null> => {
+): Promise<Array<{ textSelection: string; comment: string; topic: string }>> => {
   const ai = getAI(engine);
+  const count = Math.max(1, Math.min(5, engine.autoAnnotationCount || 2)); // Clamp between 1 and 5
+  
   const response = await ai.models.generateContent({
     model: engine.model || 'gemini-3-flash-preview', 
     contents: `
       Text: "${pageContent}"
       Persona: ${persona.name}
-      Instruction: Find 1 sentence that sparks a thought. 
-      JSON Output: { "textSelection": "...", "comment": "Colloquial thought under 100 chars, no actions", "topic": "2-word theme" }
+      Instruction: Find between 1 and ${count} distinct passages that spark a deep thought.
+      JSON Output: A list of objects. Each object: { "textSelection": "exact text from passage", "comment": "Colloquial thought under 100 chars, no actions", "topic": "2-word theme" }
     `,
     config: {
       systemInstruction: persona.systemInstruction + "\n" + THOUGHT_ONLY_CONSTRAINT,
       responseMimeType: "application/json",
       responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          textSelection: { type: Type.STRING },
-          comment: { type: Type.STRING },
-          topic: { type: Type.STRING }
-        },
-        required: ["textSelection", "comment", "topic"]
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            textSelection: { type: Type.STRING },
+            comment: { type: Type.STRING },
+            topic: { type: Type.STRING }
+          },
+          required: ["textSelection", "comment", "topic"]
+        }
       }
     }
   });
 
   try {
-    return JSON.parse(response.text || "null");
+    const result = JSON.parse(response.text || "[]");
+    return Array.isArray(result) ? result : [result];
   } catch (e) {
-    return null;
+    return [];
   }
 };
 

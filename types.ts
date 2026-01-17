@@ -28,6 +28,7 @@ export interface EngineConfig {
 
   readingMode: 'vertical' | 'horizontal';
   autonomousReading: boolean;
+  autoAnnotationCount: number; // NEW: Number of annotations per page scan
   fontSize: number;       
   theme: 'paper' | 'sepia' | 'night' | 'forest' | 'custom'; 
   customBgImage?: string; 

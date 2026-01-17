@@ -175,17 +175,38 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ config, onSave, onClose }
             
             <div className="p-4 bg-stone-50 rounded-2xl space-y-5 border border-stone-100">
               {/* Autonomous Reading Toggle */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-bold text-stone-800">Autonomous Reading (自动批注)</div>
-                  <div className="text-[10px] text-stone-500">Allow partner to read and annotate spontaneously</div>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-bold text-stone-800">Autonomous Reading (自动批注)</div>
+                    <div className="text-[10px] text-stone-500">Allow partner to read and annotate spontaneously</div>
+                  </div>
+                  <button 
+                    onClick={() => setFormData({...formData, autonomousReading: !formData.autonomousReading})}
+                    className={`w-10 h-6 rounded-full transition-colors relative ${formData.autonomousReading ? 'bg-amber-500' : 'bg-stone-300'}`}
+                  >
+                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${formData.autonomousReading ? 'left-5' : 'left-1'}`} />
+                  </button>
                 </div>
-                <button 
-                  onClick={() => setFormData({...formData, autonomousReading: !formData.autonomousReading})}
-                  className={`w-10 h-6 rounded-full transition-colors relative ${formData.autonomousReading ? 'bg-amber-500' : 'bg-stone-300'}`}
-                >
-                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${formData.autonomousReading ? 'left-5' : 'left-1'}`} />
-                </button>
+
+                {formData.autonomousReading && (
+                  <div className="pt-2 border-t border-stone-200/50 animate-fadeIn">
+                     <div className="flex justify-between text-[10px] font-bold text-stone-400 uppercase mb-2">
+                       <span>Annotations per Page</span>
+                       <span className="text-amber-600">{formData.autoAnnotationCount || 2}</span>
+                     </div>
+                     <input 
+                       type="range" min="1" max="5" step="1"
+                       value={formData.autoAnnotationCount || 2}
+                       onChange={(e) => setFormData({...formData, autoAnnotationCount: parseInt(e.target.value)})}
+                       className="w-full accent-amber-500 h-1.5 bg-stone-200 rounded-lg appearance-none cursor-pointer"
+                     />
+                     <div className="flex justify-between text-[9px] text-stone-300 mt-1">
+                        <span>Min (1)</span>
+                        <span>Max (5)</span>
+                     </div>
+                  </div>
+                )}
               </div>
 
               {/* Thinking Toggle */}

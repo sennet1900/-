@@ -44,6 +44,7 @@ const App: React.FC = () => {
       userFont: 'Inter',
       readingMode: 'horizontal',
       autonomousReading: false,
+      autoAnnotationCount: 2, // Default to 2
       fontSize: 20,
       theme: 'paper',
       bgOpacity: 0.5,
@@ -185,21 +186,21 @@ const App: React.FC = () => {
     setTimeout(async () => {
       try {
         const firstPara = content.split('\n')[0] || content;
-        const result = await autonomousScan(firstPara, persona, engineConfig, true);
-        if (result) {
-          const newAnno: Annotation = {
-            id: Date.now().toString(),
+        const results = await autonomousScan(firstPara, persona, engineConfig, true);
+        if (results && results.length > 0) {
+          const newAnnos: Annotation[] = results.map((r, i) => ({
+            id: (Date.now() + i).toString(),
             bookId: newId,
-            textSelection: result.textSelection,
-            comment: result.comment,
+            textSelection: r.textSelection,
+            comment: r.comment,
             author: 'ai',
-            topic: result.topic,
+            topic: r.topic,
             isAutonomous: true,
             timestamp: Date.now(),
             personaId: persona.id,
             position: { startOffset: 0, endOffset: 0 }
-          };
-          setAnnotations(prev => [newAnno, ...prev]);
+          }));
+          setAnnotations(prev => [...newAnnos, ...prev]);
         }
       } catch (e) {
         console.error("Initial scan for user book failed", e);
@@ -216,28 +217,37 @@ const App: React.FC = () => {
     lastScannedPageRef.current = content;
 
     try {
-      const result = await autonomousScan(content, persona, engineConfig, activeBook?.isOriginal);
-      if (result && !existingSelections.includes(result.textSelection)) {
-        const newAnno: Annotation = {
-          id: Date.now().toString(),
-          bookId: activeBookId,
-          textSelection: result.textSelection,
-          comment: result.comment,
-          author: 'ai',
-          topic: result.topic,
-          isAutonomous: true,
-          timestamp: Date.now(),
-          personaId: persona.id,
-          position: { startOffset: 0, endOffset: 0 }
-        };
-        setAnnotations(prev => [newAnno, ...prev]);
+      const results = await autonomousScan(content, persona, engineConfig, activeBook?.isOriginal);
+      
+      const newAnnos: Annotation[] = [];
+      if (results && results.length > 0) {
+        results.forEach((r, idx) => {
+          if (!existingSelections.includes(r.textSelection)) {
+             newAnnos.push({
+                id: (Date.now() + idx).toString(),
+                bookId: activeBookId,
+                textSelection: r.textSelection,
+                comment: r.comment,
+                author: 'ai',
+                topic: r.topic,
+                isAutonomous: true,
+                timestamp: Date.now(),
+                personaId: persona.id,
+                position: { startOffset: 0, endOffset: 0 }
+             });
+          }
+        });
+      }
+
+      if (newAnnos.length > 0) {
+         setAnnotations(prev => [...newAnnos, ...prev]);
       }
     } catch (err) {
       console.error("Autonomous scan failed:", err);
     } finally {
       setIsAutoScanning(false);
     }
-  }, [engineConfig.autonomousReading, engineConfig.model, activeBookId, persona, isAutoScanning, bookAnnotations, activeBook?.isOriginal]);
+  }, [engineConfig.autonomousReading, engineConfig.model, engineConfig.autoAnnotationCount, activeBookId, persona, isAutoScanning, bookAnnotations, activeBook?.isOriginal]);
 
   const handleDeleteBook = (id: string) => {
     setLibrary(prev => prev.filter(b => b.id !== id));
