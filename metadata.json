@@ -1,0 +1,8 @@
+{
+  "name": "SoulReader",
+  "description": "An AI-powered collaborative reading companion where historical or fictional personas annotate books with you and discuss their insights in real-time.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
