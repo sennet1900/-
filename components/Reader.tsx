@@ -5,7 +5,7 @@ import { Book, Annotation, EngineConfig } from '../types';
 interface ReaderProps {
   book: Book;
   annotations: Annotation[];
-  onAnnotate: (selection: string, start: number, end: number) => void;
+  onAnnotate: (selection: string, start: number, end: number, intent?: 'ai' | 'user') => void;
   activeAnnotationId: string | null;
   onSelectAnnotation: (id: string) => void;
   readingMode: 'vertical' | 'horizontal';
@@ -37,6 +37,7 @@ const Reader: React.FC<ReaderProps> = ({
 }) => {
   const [currentPage, setCurrentPage] = useState(0);
   const [showToolbarPanel, setShowToolbarPanel] = useState<'none' | 'notes' | 'stats' | 'theme' | 'font'>('none');
+  const [tempSelection, setTempSelection] = useState<string | null>(null); // State for current text selection
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Split content into pages based on paragraphs
@@ -45,10 +46,6 @@ const Reader: React.FC<ReaderProps> = ({
     const paragraphs = book.content.split('\n').filter(p => p.trim() !== '');
     if (paragraphs.length === 0) return [['(无内容)']];
     
-    // In vertical mode, we might just show everything, but for consistency we page it or show all
-    // If readingMode is vertical, we could just have 1 giant page, but let's stick to paging for horizontal
-    // To support "Scroll" properly, we can treat it as one page or keep paging. 
-    // Usually "Scroll" means one long page.
     if (readingMode === 'vertical') {
        return [paragraphs];
     }
@@ -81,12 +78,36 @@ const Reader: React.FC<ReaderProps> = ({
     setCurrentPage(0);
   }, [book.id, readingMode]);
 
-  const handleMouseUp = () => {
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
-    const selectedText = selection.toString().trim();
-    if (selectedText.length >= 1) { 
-      onAnnotate(selectedText, 0, 0);
+  // Handle Text Selection (Mobile & Desktop Friendly)
+  useEffect(() => {
+    const handleSelectionChange = () => {
+      const selection = window.getSelection();
+      const text = selection?.toString().trim();
+      
+      if (text && text.length > 0) {
+        setTempSelection(text);
+      } else {
+        // Delay clearing allows click events on floating buttons to register if the selection was cleared by the click itself.
+        // We do check activeElement, but on mobile touch events can be tricky.
+        const activeTag = document.activeElement?.tagName;
+        if (activeTag !== 'BUTTON' && activeTag !== 'INPUT' && activeTag !== 'TEXTAREA') {
+           setTempSelection(null);
+        }
+      }
+    };
+
+    document.addEventListener('selectionchange', handleSelectionChange);
+    return () => document.removeEventListener('selectionchange', handleSelectionChange);
+  }, []);
+
+  const handleManualAnnotate = (intent?: 'ai' | 'user') => {
+    if (tempSelection) {
+      onAnnotate(tempSelection, 0, 0, intent);
+      setTempSelection(null);
+      // Clear selection logic if needed
+      if (window.getSelection) {
+        window.getSelection()?.removeAllRanges();
+      }
     }
   };
 
@@ -172,7 +193,6 @@ const Reader: React.FC<ReaderProps> = ({
       {/* Main Content Area */}
       <div 
         className="w-full h-full overflow-y-auto overflow-x-hidden flex flex-col items-center custom-reader-scroll relative z-10 scroll-smooth" 
-        onMouseUp={handleMouseUp} 
         ref={scrollContainerRef}
       >
         <div 
@@ -204,6 +224,30 @@ const Reader: React.FC<ReaderProps> = ({
           <div className="h-32" />
         </div>
 
+        {/* Floating Action Buttons (Appear when text is selected) */}
+        {tempSelection && (
+           <div className="fixed bottom-36 left-1/2 -translate-x-1/2 z-[70] flex items-center gap-3 animate-bounce-in">
+              <button 
+                onMouseDown={(e) => e.preventDefault()}
+                onTouchStart={(e) => e.stopPropagation()} 
+                onClick={() => handleManualAnnotate('user')}
+                className="flex items-center gap-2 bg-white text-stone-900 px-6 py-3 rounded-full shadow-xl font-bold text-sm border border-stone-200 active:scale-95 transition-all hover:bg-stone-50"
+              >
+                <i className="fa-solid fa-pen-nib text-amber-600"></i>
+                <span>写想法</span>
+              </button>
+              <button 
+                onMouseDown={(e) => e.preventDefault()}
+                onTouchStart={(e) => e.stopPropagation()}
+                onClick={() => handleManualAnnotate('ai')}
+                className="flex items-center gap-2 bg-stone-900 text-amber-500 px-6 py-3 rounded-full shadow-xl font-bold text-sm border border-stone-700 active:scale-95 transition-all hover:scale-105"
+              >
+                <i className="fa-solid fa-sparkles animate-pulse"></i>
+                <span>AI 批注</span>
+              </button>
+           </div>
+        )}
+
         {/* Toolbar Panel */}
         {showToolbarPanel !== 'none' && (
           <div className="fixed bottom-24 left-1/2 -translate-x-1/2 w-[90%] max-w-lg bg-white/95 backdrop-blur-xl border border-stone-200 rounded-3xl shadow-2xl z-[60] overflow-hidden animate-slideUp">
@@ -213,13 +257,62 @@ const Reader: React.FC<ReaderProps> = ({
                   {showToolbarPanel === 'theme' && <><i className="fa-solid fa-palette"></i> 环境氛围</>}
                   {showToolbarPanel === 'font' && <><i className="fa-solid fa-font"></i> 字体字格</>}
                   {showToolbarPanel === 'stats' && <><i className="fa-solid fa-chart-pie"></i> 阅读进度</>}
+                  {showToolbarPanel === 'notes' && <><i className="fa-solid fa-feather-pointed"></i> 阅历 (批注)</>}
                 </h4>
                 <button onClick={() => setShowToolbarPanel('none')} className="text-stone-400 hover:text-stone-900 transition-colors">
                   <i className="fa-solid fa-xmark"></i>
                 </button>
               </div>
 
-              <div className="max-h-[300px] overflow-y-auto">
+              <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
+                
+                {/* Notes (Annotations List) */}
+                {showToolbarPanel === 'notes' && (
+                  <div className="space-y-4 py-2">
+                    <div className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">
+                       All Annotations ({annotations.length})
+                    </div>
+                    {annotations.length === 0 ? (
+                      <div className="text-center text-stone-400 py-8 italic text-xs border-2 border-dashed border-stone-100 rounded-xl">
+                        No thoughts recorded yet.<br/>Select text to begin.
+                      </div>
+                    ) : (
+                      annotations.map(anno => (
+                        <div 
+                          key={anno.id}
+                          onClick={() => {
+                             onSelectAnnotation(anno.id);
+                             // Auto-jump logic: find the page that contains this text selection
+                             const pageIndex = pages.findIndex(p => p.join('\n').includes(anno.textSelection));
+                             if (pageIndex !== -1 && pageIndex !== currentPage) {
+                               setCurrentPage(pageIndex);
+                             }
+                          }}
+                          className={`p-3 rounded-xl border cursor-pointer transition-all ${activeAnnotationId === anno.id ? 'bg-amber-50 border-amber-200 shadow-sm' : 'bg-stone-50 border-stone-100 hover:border-stone-200'}`}
+                        >
+                           <div className="text-xs font-serif font-bold text-stone-800 mb-1 line-clamp-2 border-l-2 border-stone-300 pl-2">
+                            "{anno.textSelection}"
+                          </div>
+                          <div className="flex items-center justify-between mt-2">
+                             <div className="flex items-center gap-2">
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${anno.author === 'ai' ? 'bg-amber-100 text-amber-700' : 'bg-stone-200 text-stone-600'}`}>
+                                   {anno.author === 'ai' ? 'AI' : 'You'}
+                                </span>
+                                <span className="text-[10px] text-stone-400">{new Date(anno.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                             </div>
+                             {anno.comment && <i className="fa-solid fa-comment-dots text-stone-300 text-xs"></i>}
+                          </div>
+                          {anno.comment && (
+                             <div className="mt-2 text-[11px] text-stone-600 line-clamp-2 leading-relaxed">
+                                {anno.comment}
+                             </div>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+
                 {showToolbarPanel === 'stats' && (
                   <div className="space-y-6 py-2">
                     <div className="flex items-center justify-between px-2">

@@ -7,28 +7,37 @@ export interface Persona {
   description: string;
   avatar: string;
   systemInstruction: string;
+  longTermMemory?: string; // NEW: Stores consolidated memories
 }
 
 export interface EngineConfig {
+  provider: 'gemini' | 'openai'; 
   baseUrl: string;         
   apiKey: string;          
   model: string;           
   temperature: number;
   useThinking: boolean;
   
+  // Cloud Backup Settings
+  githubToken?: string;
+  backupGistId?: string;
+
+  // Memory Settings (NEW)
+  autoMemoryThreshold: number; // 0 to disable, or N (e.g. 50, 100)
+
   // Font Settings
-  aiFont: string;          // Fallback/Preset for annotations
-  userFont: string;        // Fallback/Preset for user notes
+  aiFont: string;          
+  userFont: string;        
   
   // Custom Fonts (Uploaded)
-  customFontName?: string;      // Book Content Font Name
-  customFontData?: string;      // Book Content Font File (Base64)
-  customNoteFontName?: string;  // Annotation/AI Font Name (NEW)
-  customNoteFontData?: string;  // Annotation/AI Font File (NEW)
+  customFontName?: string;      
+  customFontData?: string;      
+  customNoteFontName?: string;  
+  customNoteFontData?: string;  
 
   readingMode: 'vertical' | 'horizontal';
   autonomousReading: boolean;
-  autoAnnotationCount: number; // NEW: Number of annotations per page scan
+  autoAnnotationCount: number; 
   fontSize: number;       
   theme: 'paper' | 'sepia' | 'night' | 'forest' | 'custom'; 
   customBgImage?: string; 
@@ -50,12 +59,30 @@ export interface Annotation {
     startOffset: number;
     endOffset: number;
   };
+  // Store the full conversation history
+  chatHistory?: { role: string; text: string }[];
+}
+
+// NEW: Structured Writing Data
+export interface Chapter {
+  id: string;
+  title: string;
+  content: string;
+  lastModified: number;
+}
+
+export interface WritingMetadata {
+  chapters: Chapter[];
+  mainOutline: string;      // 作品大纲
+  volumeOutline: string;    // 分卷大纲
+  inspirations: string;     // 灵感记录
+  characterSettings: string;// 角色设定
 }
 
 export interface Book {
   id: string;
   title: string;
-  content: string;
+  content: string; // Compiled content for Reader
   author?: string;
   category: string;
   coverColor: string;
@@ -65,6 +92,7 @@ export interface Book {
   userReview?: string;
   aiReview?: string;
   isOriginal?: boolean;
+  writingMetadata?: WritingMetadata; // NEW: Stores structured writing data
 }
 
 export type AppState = 'library' | 'reading';

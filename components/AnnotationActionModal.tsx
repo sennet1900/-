@@ -6,10 +6,11 @@ interface AnnotationActionModalProps {
   onAIAnnotate: () => void;
   onUserAnnotate: (note: string) => void;
   onClose: () => void;
+  initialMode?: 'choice' | 'input';
 }
 
-const AnnotationActionModal: React.FC<AnnotationActionModalProps> = ({ selection, onAIAnnotate, onUserAnnotate, onClose }) => {
-  const [mode, setMode] = useState<'choice' | 'input'>('choice');
+const AnnotationActionModal: React.FC<AnnotationActionModalProps> = ({ selection, onAIAnnotate, onUserAnnotate, onClose, initialMode = 'choice' }) => {
+  const [mode, setMode] = useState<'choice' | 'input'>(initialMode);
   const [note, setNote] = useState('');
 
   return (
@@ -62,12 +63,14 @@ const AnnotationActionModal: React.FC<AnnotationActionModalProps> = ({ selection
                 className="w-full bg-stone-50 border border-stone-200 rounded-2xl p-4 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 min-h-[120px] resize-none"
               />
               <div className="flex gap-2">
-                <button 
-                  onClick={() => setMode('choice')}
-                  className="flex-1 py-2 text-stone-500 hover:bg-stone-100 rounded-xl text-xs font-bold transition-colors"
-                >
-                  Back
-                </button>
+                {initialMode === 'choice' && (
+                  <button 
+                    onClick={() => setMode('choice')}
+                    className="flex-1 py-2 text-stone-500 hover:bg-stone-100 rounded-xl text-xs font-bold transition-colors"
+                  >
+                    Back
+                  </button>
+                )}
                 <button 
                   disabled={!note.trim()}
                   onClick={() => onUserAnnotate(note)}

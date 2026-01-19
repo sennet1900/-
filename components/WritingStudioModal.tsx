@@ -1,11 +1,11 @@
 
-import React, { useState, useEffect } from 'react';
-import { Persona, Book } from '../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Persona, Book, WritingMetadata, Chapter } from '../types';
 
 interface WritingStudioModalProps {
   activePersona: Persona;
   existingBook?: Book | null;
-  onSave: (title: string, content: string, author: string, category: string, existingId?: string) => void;
+  onSave: (title: string, content: string, author: string, category: string, existingId?: string, writingMetadata?: WritingMetadata) => void;
   onClose: () => void;
 }
 
@@ -22,102 +22,420 @@ const Avatar: React.FC<{ avatar: string; className?: string }> = ({ avatar, clas
   );
 };
 
+// Sub-components for better organization
+const InitScreen: React.FC<{
+  onStart: (title: string, author: string, category: string) => void;
+  onClose: () => void;
+}> = ({ onStart, onClose }) => {
+  const [title, setTitle] = useState('');
+  const [author, setAuthor] = useState('');
+  const [category, setCategory] = useState('Novel');
+
+  return (
+    <div className="flex flex-col h-full items-center justify-center p-8 bg-stone-50 animate-fadeIn">
+      <div className="w-full max-w-md bg-white p-8 rounded-3xl shadow-xl border border-stone-200">
+        <div className="text-center mb-8">
+           <h2 className="text-2xl font-serif font-bold text-stone-900">Create New Work</h2>
+           <p className="text-stone-400 text-sm mt-2">Begin your journey in the Ink Studio.</p>
+        </div>
+        <div className="space-y-6">
+           <div className="space-y-2">
+              <label className="text-xs font-bold text-stone-400 uppercase tracking-wider">Book Title</label>
+              <input 
+                autoFocus
+                type="text" 
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                placeholder="e.g. The Silent Sea"
+                className="w-full bg-stone-50 border border-stone-200 rounded-xl py-3 px-4 focus:ring-2 focus:ring-amber-500/20 focus:outline-none focus:border-amber-500 font-serif text-lg"
+              />
+           </div>
+           <div className="space-y-2">
+              <label className="text-xs font-bold text-stone-400 uppercase tracking-wider">Author Name</label>
+              <input 
+                type="text" 
+                value={author}
+                onChange={e => setAuthor(e.target.value)}
+                placeholder="Your Pen Name"
+                className="w-full bg-stone-50 border border-stone-200 rounded-xl py-3 px-4 focus:ring-2 focus:ring-amber-500/20 focus:outline-none focus:border-amber-500"
+              />
+           </div>
+           <div className="space-y-2">
+              <label className="text-xs font-bold text-stone-400 uppercase tracking-wider">Category</label>
+              <div className="flex flex-wrap gap-2">
+                 {['Novel', 'Fanfic', 'Essay', 'Script'].map(cat => (
+                    <button 
+                      key={cat}
+                      onClick={() => setCategory(cat)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${category === cat ? 'bg-amber-500 text-white' : 'bg-stone-100 text-stone-500 hover:bg-stone-200'}`}
+                    >
+                      {cat}
+                    </button>
+                 ))}
+              </div>
+           </div>
+           <div className="flex gap-4 pt-4">
+              <button onClick={onClose} className="flex-1 py-3 text-stone-500 font-bold hover:bg-stone-100 rounded-xl transition-all">Cancel</button>
+              <button 
+                onClick={() => onStart(title, author, category)}
+                disabled={!title.trim() || !author.trim()}
+                className="flex-[2] py-3 bg-stone-900 text-white font-bold rounded-xl shadow-lg hover:bg-stone-800 disabled:opacity-50 transition-all"
+              >
+                Start Writing
+              </button>
+           </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+type EditorSection = 'chapter' | 'mainOutline' | 'volumeOutline' | 'inspirations' | 'characterSettings';
+
 const WritingStudioModal: React.FC<WritingStudioModalProps> = ({ activePersona, existingBook, onSave, onClose }) => {
-  const [title, setTitle] = useState(existingBook?.title || '');
-  const [content, setContent] = useState(existingBook?.content || '');
-  const [author, setAuthor] = useState(existingBook?.author || 'SoulReader Author');
-  const [category, setCategory] = useState(existingBook?.category || 'Original Draft');
-  const [wordCount, setWordCount] = useState(0);
+  // State 1: Metadata & Book Info
+  const [bookInfo, setBookInfo] = useState({
+    title: existingBook?.title || '',
+    author: existingBook?.author || '',
+    category: existingBook?.category || 'Novel'
+  });
 
+  const [metadata, setMetadata] = useState<WritingMetadata>({
+    chapters: existingBook?.writingMetadata?.chapters || [],
+    mainOutline: existingBook?.writingMetadata?.mainOutline || '',
+    volumeOutline: existingBook?.writingMetadata?.volumeOutline || '',
+    inspirations: existingBook?.writingMetadata?.inspirations || '',
+    characterSettings: existingBook?.writingMetadata?.characterSettings || ''
+  });
+
+  // Init check
   useEffect(() => {
-    const words = content.trim().split(/\s+/).filter(w => w.length > 0).length;
-    setWordCount(words);
-  }, [content]);
+    if (existingBook && !existingBook.writingMetadata && existingBook.content && metadata.chapters.length === 0) {
+       setMetadata(prev => ({
+         ...prev,
+         chapters: [{
+           id: Date.now().toString(),
+           title: 'Chapter 1',
+           content: existingBook.content,
+           lastModified: Date.now()
+         }]
+       }));
+    }
+  }, [existingBook]);
 
-  const handlePublish = () => {
-    if (title.trim() && content.trim()) {
-      onSave(title, content, author, category, existingBook?.id);
+  // State 2: UI State
+  const [isInit, setIsInit] = useState(!existingBook);
+  const [activeTab, setActiveTab] = useState<'directory' | 'blueprints'>('directory');
+  const [activeSection, setActiveSection] = useState<EditorSection>('chapter');
+  const [activeChapterId, setActiveChapterId] = useState<string | null>(null);
+  const [isDeleteMode, setIsDeleteMode] = useState(false);
+  
+  // Initialize selection
+  useEffect(() => {
+    if (!isInit && activeChapterId === null) {
+       if (metadata.chapters.length > 0) {
+         setActiveChapterId(metadata.chapters[0].id);
+         setActiveSection('chapter');
+       } else if (activeSection === 'chapter') {
+         setActiveChapterId(null);
+       }
+    }
+  }, [isInit, metadata.chapters]);
+
+  // Content Editing
+  const currentContent = useMemo(() => {
+    if (activeSection === 'chapter') {
+      return metadata.chapters.find(c => c.id === activeChapterId)?.content || '';
+    }
+    return metadata[activeSection] as string;
+  }, [activeSection, activeChapterId, metadata]);
+
+  const wordCount = useMemo(() => {
+    return currentContent.trim().split(/\s+/).filter(w => w.length > 0).length;
+  }, [currentContent]);
+
+  // --- Handlers ---
+
+  const handleInitStart = (title: string, author: string, category: string) => {
+    setBookInfo({ title, author, category });
+    setIsInit(false);
+    const firstChapter = {
+      id: Date.now().toString(),
+      title: 'Chapter 1',
+      content: '',
+      lastModified: Date.now()
+    };
+    setMetadata(prev => ({ ...prev, chapters: [firstChapter] }));
+    setActiveChapterId(firstChapter.id);
+  };
+
+  const handleUpdateContent = (text: string) => {
+    if (activeSection === 'chapter' && activeChapterId) {
+      setMetadata(prev => ({
+        ...prev,
+        chapters: prev.chapters.map(c => c.id === activeChapterId ? { ...c, content: text, lastModified: Date.now() } : c)
+      }));
+    } else if (activeSection !== 'chapter') {
+      setMetadata(prev => ({
+        ...prev,
+        [activeSection]: text
+      }));
     }
   };
 
+  const handleAddChapter = () => {
+    const newId = Date.now().toString();
+    const count = metadata.chapters.length + 1;
+    const newChapter: Chapter = {
+      id: newId,
+      title: `Chapter ${count}`,
+      content: '',
+      lastModified: Date.now()
+    };
+    setMetadata(prev => ({ ...prev, chapters: [...prev.chapters, newChapter] }));
+    setActiveChapterId(newId);
+    setActiveSection('chapter');
+    setActiveTab('directory');
+    setIsDeleteMode(false);
+  };
+
+  const handleDeleteChapter = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (confirm("Delete this chapter permanently?")) {
+       setMetadata(prev => ({
+         ...prev,
+         chapters: prev.chapters.filter(c => c.id !== id)
+       }));
+       if (activeChapterId === id) setActiveChapterId(null);
+    }
+  };
+
+  const handleRenameChapter = (id: string, newTitle: string) => {
+    setMetadata(prev => ({
+      ...prev,
+      chapters: prev.chapters.map(c => c.id === id ? { ...c, title: newTitle } : c)
+    }));
+  };
+
+  const handleSaveAll = () => {
+    const compiledContent = metadata.chapters.map(c => `${c.title}\n\n${c.content}`).join('\n\n***\n\n');
+    onSave(
+      bookInfo.title,
+      compiledContent,
+      bookInfo.author,
+      bookInfo.category,
+      existingBook?.id,
+      metadata
+    );
+  };
+
+  // Helper
+  const getChapterWordCount = (content: string) => content.trim().split(/\s+/).filter(w => w.length > 0).length;
+  const formatTime = (ts: number) => new Date(ts).toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  // --- Render ---
+
+  if (isInit) {
+    return <InitScreen onStart={handleInitStart} onClose={onClose} />;
+  }
+
   return (
     <div className="fixed inset-0 z-[150] bg-white flex flex-col animate-fadeIn">
-      {/* Writing Header */}
-      <header className="h-16 md:h-20 border-b border-stone-100 flex items-center justify-between px-4 md:px-12 shrink-0 gap-4">
-        <div className="flex items-center gap-4 md:gap-6 flex-1 overflow-hidden">
+      {/* 1. Header */}
+      <header className="h-14 border-b border-stone-100 flex items-center justify-between px-4 md:px-6 shrink-0 bg-white z-20">
+        <div className="flex items-center gap-4 flex-1 overflow-hidden">
           <button onClick={onClose} className="text-stone-400 hover:text-stone-900 transition-colors shrink-0">
              <i className="fa-solid fa-arrow-left text-lg"></i>
           </button>
-          <div className="h-6 w-px bg-stone-200 shrink-0"></div>
-          <div className="flex flex-col flex-1 min-w-0">
-            <input 
-              type="text" 
-              placeholder="Title..."
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="text-lg md:text-xl font-serif font-bold text-stone-900 bg-transparent border-none focus:outline-none placeholder:text-stone-200 w-full truncate"
-            />
-            <div className="flex gap-4 text-[10px] md:text-xs">
-                <input 
-                    type="text" 
-                    value={author}
-                    onChange={(e) => setAuthor(e.target.value)}
-                    className="font-bold text-stone-400 bg-transparent border-none focus:outline-none uppercase tracking-widest max-w-[100px] truncate"
-                />
-                <span className="text-stone-300 hidden sm:inline">|</span>
-                <span className="font-bold text-amber-600 uppercase tracking-widest hidden sm:inline">{wordCount} Words</span>
-            </div>
+          <div className="flex flex-col overflow-hidden">
+             <div className="flex items-baseline gap-2">
+                <h2 className="font-serif font-bold text-stone-900 truncate text-base">{bookInfo.title}</h2>
+             </div>
+             <span className="text-[10px] text-stone-400 font-medium truncate">{wordCount} Words</span>
           </div>
         </div>
 
-        {/* Desktop Controls */}
-        <div className="hidden md:flex items-center gap-4">
-           <div className="flex items-center gap-3 mr-6 bg-stone-50 px-4 py-2 rounded-2xl border border-stone-100">
-              <Avatar avatar={activePersona.avatar} className="w-10 h-10 text-2xl" />
-              <div className="flex flex-col">
-                <span className="text-[10px] font-bold text-stone-400 uppercase">First Reader: {activePersona.name}</span>
-                <span className="text-xs font-serif text-stone-600 italic">"I'm waiting to be moved by your words."</span>
-              </div>
+        <div className="flex items-center gap-3">
+           {/* Cloud Sync Icon */}
+           <div className="w-8 h-8 rounded-full bg-stone-50 flex items-center justify-center text-stone-400">
+             <i className="fa-solid fa-cloud-arrow-up text-xs"></i>
            </div>
+           
            <button 
-             onClick={handlePublish}
-             disabled={!title.trim() || !content.trim()}
-             className="px-8 py-3 bg-stone-900 text-white rounded-2xl font-bold text-sm hover:bg-stone-800 transition-all disabled:opacity-20 shadow-xl flex items-center gap-2"
+             onClick={handleSaveAll}
+             className="px-4 py-1.5 bg-stone-900 text-white rounded-lg font-bold text-xs hover:bg-stone-800 transition-all shadow-lg flex items-center gap-2"
            >
-             <i className="fa-solid fa-sparkles"></i>
-             {existingBook ? 'Sync & Co-read' : 'Finish & Start Co-reading'}
+             Finish
            </button>
         </div>
       </header>
 
-      {/* Editor Area */}
-      <main className="flex-1 overflow-y-auto bg-[#fcfbf9] relative flex justify-center py-8 md:py-20">
-         <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/handmade-paper.png')]"></div>
-         
-         <div className="max-w-3xl w-full px-6 md:px-12 pb-32 md:pb-24">
-            <textarea 
-               autoFocus
-               value={content}
-               onChange={(e) => setContent(e.target.value)}
-               placeholder="Write without fear. Your first reader is ready..."
-               className="w-full h-full bg-transparent border-none focus:outline-none font-serif text-lg md:text-2xl leading-relaxed text-stone-800 placeholder:text-stone-200 resize-none min-h-[60vh] md:min-h-[500px]"
-            />
-         </div>
+      {/* 2. Main Layout */}
+      <div className="flex-1 flex overflow-hidden">
+        
+        {/* Sidebar */}
+        <aside className="w-full md:w-80 flex flex-col border-r border-stone-100 bg-stone-50/50 shrink-0 md:relative absolute inset-0 z-30 md:z-auto" style={{ display: (window.innerWidth < 768 && activeChapterId && activeSection === 'chapter') ? 'none' : 'flex' }}>
+          
+          {/* Tabs */}
+          <div className="flex border-b border-stone-100 bg-white">
+             <button 
+               onClick={() => setActiveTab('directory')}
+               className={`flex-1 py-3 text-xs font-bold transition-all ${activeTab === 'directory' ? 'text-stone-900 border-b-2 border-stone-900' : 'text-stone-400'}`}
+             >
+                章节目录
+             </button>
+             <button 
+               onClick={() => setActiveTab('blueprints')}
+               className={`flex-1 py-3 text-xs font-bold transition-all ${activeTab === 'blueprints' ? 'text-stone-900 border-b-2 border-stone-900' : 'text-stone-400'}`}
+             >
+                大纲
+             </button>
+          </div>
 
-         {/* Mobile Floating Action Button (Replaces the Anticipation Box) */}
-         <button 
-            onClick={handlePublish}
-            disabled={!title.trim() || !content.trim()}
-            className="md:hidden fixed right-6 bottom-16 z-50 px-6 py-4 bg-stone-900 text-white rounded-full shadow-2xl flex items-center gap-2 font-bold text-xs uppercase tracking-wider disabled:opacity-50 transition-all active:scale-95 animate-slideUp border-2 border-stone-800/20 backdrop-blur-sm"
-         >
-            <i className="fa-solid fa-sparkles text-amber-500"></i>
-            <span>{existingBook ? 'Sync' : 'Finish'}</span>
-         </button>
-      </main>
+          {/* Toolbar (Only for Directory) */}
+          {activeTab === 'directory' && (
+            <div className="flex items-center justify-end gap-2 px-4 py-2 border-b border-stone-100 bg-stone-50/50">
+               <button className="w-8 h-8 flex items-center justify-center text-stone-400 hover:text-stone-900 transition-colors">
+                 <i className="fa-solid fa-arrow-down-short-wide"></i>
+               </button>
+               <button 
+                 onClick={() => setIsDeleteMode(!isDeleteMode)}
+                 className={`w-8 h-8 flex items-center justify-center transition-colors rounded-lg ${isDeleteMode ? 'bg-red-100 text-red-600' : 'text-stone-400 hover:text-stone-900'}`}
+               >
+                 <i className="fa-solid fa-trash-can"></i>
+               </button>
+               <button 
+                 onClick={handleAddChapter}
+                 className="w-8 h-8 flex items-center justify-center bg-stone-900 text-white rounded-lg shadow-sm hover:bg-stone-700 transition-colors"
+               >
+                 <i className="fa-solid fa-plus"></i>
+               </button>
+            </div>
+          )}
 
-      <footer className="h-10 border-t border-stone-50 bg-white flex items-center justify-center px-4 md:px-12 text-[8px] md:text-[9px] text-stone-300 font-bold uppercase tracking-widest shrink-0">
-         Inking Studio • {existingBook ? 'Editing Mode' : 'Creation Mode'}
-      </footer>
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-0">
+             {activeTab === 'directory' && (
+               <div className="pb-16">
+                 {metadata.chapters.map((chapter, idx) => (
+                    <div 
+                      key={chapter.id}
+                      onClick={() => { 
+                         if (!isDeleteMode) {
+                           setActiveChapterId(chapter.id); 
+                           setActiveSection('chapter'); 
+                         }
+                      }}
+                      className={`relative px-4 py-3 cursor-pointer transition-all border-b border-stone-100 flex items-center justify-between ${activeSection === 'chapter' && activeChapterId === chapter.id ? 'bg-white border-l-4 border-l-stone-900' : 'hover:bg-white border-l-4 border-l-transparent'}`}
+                    >
+                       <div className="flex-1 min-w-0">
+                          <div className="text-sm font-bold text-stone-800 truncate mb-1">
+                             {chapter.title}
+                          </div>
+                          <div className="flex items-center gap-3 text-[10px] text-stone-400">
+                             <span>{getChapterWordCount(chapter.content)}字</span>
+                             <span>{formatTime(chapter.lastModified)}</span>
+                          </div>
+                       </div>
+                       
+                       {isDeleteMode && (
+                         <button 
+                           onClick={(e) => handleDeleteChapter(chapter.id, e)}
+                           className="w-8 h-8 flex items-center justify-center text-red-500 bg-red-50 rounded-full hover:bg-red-100 transition-colors shrink-0 ml-2"
+                         >
+                            <i className="fa-solid fa-minus"></i>
+                         </button>
+                       )}
+                    </div>
+                 ))}
+                 
+                 <div className="p-4">
+                    <button 
+                      onClick={handleAddChapter}
+                      className="w-full py-3 flex items-center justify-center gap-2 text-stone-400 hover:text-stone-600 transition-colors border border-dashed border-stone-200 rounded-xl"
+                    >
+                       <i className="fa-solid fa-circle-plus"></i>
+                       <span className="text-xs font-bold">新建章节</span>
+                    </button>
+                 </div>
+               </div>
+             )}
+
+             {activeTab === 'blueprints' && (
+               <div className="p-4 space-y-2">
+                 {[
+                   { id: 'mainOutline', label: '作品大纲', icon: 'fa-book' },
+                   { id: 'volumeOutline', label: '分卷大纲', icon: 'fa-layer-group' },
+                   { id: 'inspirations', label: '灵感记录', icon: 'fa-lightbulb' },
+                   { id: 'characterSettings', label: '角色设定', icon: 'fa-users' },
+                 ].map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => { setActiveSection(item.id as EditorSection); setActiveChapterId(null); }}
+                      className={`w-full text-left p-4 rounded-xl flex items-center gap-4 transition-all border ${activeSection === item.id ? 'bg-white border-stone-200 shadow-sm' : 'bg-transparent border-transparent text-stone-500 hover:bg-white/50'}`}
+                    >
+                       <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${activeSection === item.id ? 'bg-stone-900 text-white' : 'bg-stone-100 text-stone-400'}`}>
+                          <i className={`fa-solid ${item.icon}`}></i>
+                       </div>
+                       <span className="text-sm font-bold text-stone-800">{item.label}</span>
+                    </button>
+                 ))}
+               </div>
+             )}
+          </div>
+        </aside>
+
+        {/* Editor Area (Hidden on mobile if directory is showing) */}
+        <main className={`flex-1 bg-[#fcfbf9] relative flex flex-col ${(!activeChapterId && activeSection === 'chapter' && window.innerWidth < 768) ? 'hidden' : 'flex'}`}>
+           <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/handmade-paper.png')]"></div>
+           
+           {/* Section Header */}
+           <div className="h-14 border-b border-stone-100/50 flex items-center px-6 shrink-0 bg-white/50 backdrop-blur-sm justify-between">
+              {/* Mobile Back Button */}
+              <button 
+                onClick={() => { setActiveChapterId(null); setActiveSection('chapter'); }}
+                className="md:hidden mr-4 w-8 h-8 flex items-center justify-center rounded-full bg-stone-100 text-stone-500"
+              >
+                 <i className="fa-solid fa-chevron-left"></i>
+              </button>
+
+              <div className="flex-1">
+                {activeSection === 'chapter' && activeChapterId ? (
+                   <input 
+                     type="text"
+                     value={metadata.chapters.find(c => c.id === activeChapterId)?.title || ''}
+                     onChange={(e) => handleRenameChapter(activeChapterId, e.target.value)}
+                     className="bg-transparent font-bold text-stone-900 focus:outline-none focus:border-b border-stone-300 text-base w-full"
+                     placeholder="Chapter Title"
+                   />
+                ) : (
+                   <h3 className="font-bold text-stone-400 text-xs uppercase tracking-widest">
+                     {activeSection === 'mainOutline' && 'Master Outline'}
+                     {activeSection === 'volumeOutline' && 'Volume Breakdown'}
+                     {activeSection === 'inspirations' && 'Spark Log'}
+                     {activeSection === 'characterSettings' && 'Character Database'}
+                   </h3>
+                )}
+              </div>
+           </div>
+
+           <div className="flex-1 overflow-y-auto px-6 md:px-12 py-8 relative">
+              <textarea 
+                 value={currentContent}
+                 onChange={(e) => handleUpdateContent(e.target.value)}
+                 placeholder={activeSection === 'chapter' ? "Start writing your chapter..." : "Draft your ideas here..."}
+                 className="w-full h-full bg-transparent border-none focus:outline-none font-serif text-lg leading-relaxed text-stone-800 placeholder:text-stone-300 resize-none min-h-[60vh]"
+              />
+           </div>
+           
+           {/* Mobile Floating Action Button (Only for quick save or AI) */}
+           <button 
+              onClick={handleSaveAll}
+              className="md:hidden fixed right-6 bottom-8 z-50 w-12 h-12 bg-stone-900 text-amber-500 rounded-full shadow-2xl flex items-center justify-center transition-all active:scale-95 border-2 border-stone-800"
+           >
+              <i className="fa-solid fa-pen-nib text-lg"></i>
+           </button>
+        </main>
+      </div>
     </div>
   );
 };

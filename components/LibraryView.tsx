@@ -23,6 +23,7 @@ const LibraryView: React.FC<LibraryViewProps> = ({
 }) => {
   const [filterCategory, setFilterCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
 
   const categories = useMemo(() => {
     const cats = new Set(library.map(b => b.category));
@@ -38,16 +39,61 @@ const LibraryView: React.FC<LibraryViewProps> = ({
     });
   }, [library, filterCategory, searchQuery]);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = event.target?.result as string;
-      onImport(file.name.replace(/\.[^/.]+$/, ""), content);
-    };
-    reader.readAsText(file);
+    setIsImporting(true);
+    const title = file.name.replace(/\.[^/.]+$/, "");
+
+    try {
+      if (file.type === 'application/pdf') {
+        // Dynamic import to keep initial bundle size small
+        const pdfjsLib = await import('pdfjs-dist');
+        // Set worker source to the same CDN version
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs';
+
+        const arrayBuffer = await file.arrayBuffer();
+        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+        const pdf = await loadingTask.promise;
+        
+        let fullText = '';
+        
+        // Iterate pages
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          
+          // Simple join. For better formatting, one might analyze 'transform' items, but this suffices for a reader.
+          const pageText = textContent.items.map((item: any) => item.str).join(' ');
+          
+          // Add double newline to separate pages naturally in the reader
+          fullText += pageText + '\n\n';
+        }
+
+        onImport(title, fullText);
+
+      } else {
+        // Regular Text/Markdown parsing
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const content = event.target?.result as string;
+          onImport(title, content);
+          setIsImporting(false);
+        };
+        reader.onerror = () => setIsImporting(false);
+        reader.readAsText(file);
+        return; // Return early as reader is async but handled by callback
+      }
+    } catch (err) {
+      console.error("File Import Error:", err);
+      alert("Failed to read file. If this is a PDF, ensure it contains selectable text.");
+    } finally {
+      // For PDF flow (await based), stop loading here. For text flow, it's handled in callback.
+      if (file.type === 'application/pdf') {
+        setIsImporting(false);
+      }
+    }
   };
 
   return (
@@ -71,13 +117,14 @@ const LibraryView: React.FC<LibraryViewProps> = ({
             <div className="relative group">
               <input 
                 type="file" 
-                accept=".txt,.md" 
+                accept=".txt,.md,.pdf" 
                 onChange={handleFileUpload}
-                className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                disabled={isImporting}
+                className="absolute inset-0 opacity-0 cursor-pointer z-10 disabled:cursor-not-allowed"
               />
-              <button className="px-6 py-3 bg-stone-900 text-white rounded-2xl font-bold text-sm flex items-center gap-2 hover:bg-stone-800 transition-all shadow-lg">
-                <i className="fa-solid fa-plus"></i>
-                <span>Import Book</span>
+              <button className={`px-6 py-3 bg-stone-900 text-white rounded-2xl font-bold text-sm flex items-center gap-2 hover:bg-stone-800 transition-all shadow-lg ${isImporting ? 'opacity-80' : ''}`}>
+                {isImporting ? <i className="fa-solid fa-spinner animate-spin"></i> : <i className="fa-solid fa-plus"></i>}
+                <span>{isImporting ? 'Parsing...' : 'Import Book'}</span>
               </button>
             </div>
           </div>
@@ -125,7 +172,7 @@ const LibraryView: React.FC<LibraryViewProps> = ({
                 <i className="fa-solid fa-book text-3xl text-stone-300"></i>
               </div>
               <h3 className="text-xl font-bold text-stone-800">No books found</h3>
-              <p className="text-stone-400 max-w-xs mx-auto mt-2">Import your first text file or start writing to begin your collaborative reading journey.</p>
+              <p className="text-stone-400 max-w-xs mx-auto mt-2">Import your first text/PDF file or start writing to begin your collaborative reading journey.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">

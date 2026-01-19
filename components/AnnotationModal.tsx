@@ -7,6 +7,7 @@ interface AnnotationActionModalProps {
   annotation: Annotation;
   persona: Persona;
   onClose: () => void;
+  onUpdate: (id: string, updates: Partial<Annotation>) => void;
   engineConfig: EngineConfig;
   isOriginal?: boolean;
 }
@@ -24,7 +25,7 @@ const Avatar: React.FC<{ avatar: string; className?: string }> = ({ avatar, clas
   );
 };
 
-const AnnotationModal: React.FC<AnnotationActionModalProps> = ({ annotation, persona, onClose, engineConfig, isOriginal = false }) => {
+const AnnotationModal: React.FC<AnnotationActionModalProps> = ({ annotation, persona, onClose, onUpdate, engineConfig, isOriginal = false }) => {
   const [messages, setMessages] = useState<{role: string, text: string}[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -37,9 +38,19 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({ annotation, per
     if (initialized.current) return;
     initialized.current = true;
 
+    // 1. If chat history exists, load it
+    if (annotation.chatHistory && annotation.chatHistory.length > 0) {
+      setMessages(annotation.chatHistory);
+      return;
+    }
+
+    // 2. If no history, construct initial state
     const init = async () => {
+      let initialMessages: {role: string, text: string}[] = [];
+
       if (annotation.author === 'user') {
-        setMessages([{ role: 'user', text: annotation.comment }]);
+        initialMessages = [{ role: 'user', text: annotation.comment }];
+        setMessages(initialMessages);
         setIsTyping(true);
         try {
           const aiReply = await generateAIResponseToUserNote(
@@ -49,35 +60,49 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({ annotation, per
             engineConfig,
             isOriginal
           );
-          setMessages(prev => [...prev, { role: 'model', text: aiReply }]);
+          initialMessages.push({ role: 'model', text: aiReply });
+          setMessages(initialMessages);
+          // Save immediately
+          onUpdate(annotation.id, { chatHistory: initialMessages });
         } catch (err) {
           console.error(err);
-          setMessages(prev => [...prev, { role: 'model', text: "I'm reflecting on your thought..." }]);
+          const fallback = [{ role: 'model', text: "I'm reflecting on your thought..." }];
+          setMessages(prev => [...prev, ...fallback]);
+          // Save fallback
+          onUpdate(annotation.id, { chatHistory: [...initialMessages, ...fallback] });
         } finally {
           setIsTyping(false);
         }
       } else {
-        setMessages([{ role: 'model', text: annotation.comment }]);
+        initialMessages = [{ role: 'model', text: annotation.comment }];
+        setMessages(initialMessages);
+        // Save initial AI thought as start of chat
+        onUpdate(annotation.id, { chatHistory: initialMessages });
       }
     };
 
     init();
-  }, [annotation, persona, engineConfig, isOriginal]);
+  }, [annotation, persona, engineConfig, isOriginal, onUpdate]);
 
   const handleSend = async () => {
     if (!input.trim() || isTyping) return;
 
     const userMsg = input;
     setInput('');
-    setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
+    const newHistory = [...messages, { role: 'user', text: userMsg }];
+    setMessages(newHistory);
+    onUpdate(annotation.id, { chatHistory: newHistory }); // Save user msg
     setIsTyping(true);
 
     try {
       const reply = await chatWithPersona(userMsg, annotation.textSelection, persona, messages, engineConfig, isOriginal);
-      setMessages(prev => [...prev, { role: 'model', text: reply }]);
+      const updatedHistory = [...newHistory, { role: 'model', text: reply }];
+      setMessages(updatedHistory);
+      onUpdate(annotation.id, { chatHistory: updatedHistory }); // Save AI reply
     } catch (err) {
       console.error(err);
-      setMessages(prev => [...prev, { role: 'model', text: "Forgive me, my thoughts are clouded right now." }]);
+      const errorMsg = { role: 'model', text: "Forgive me, my thoughts are clouded right now." };
+      setMessages(prev => [...prev, errorMsg]);
     } finally {
       setIsTyping(false);
     }
