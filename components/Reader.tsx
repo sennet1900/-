@@ -174,11 +174,17 @@ const Reader: React.FC<ReaderProps> = ({
       return <p key={paraIdx} className="mb-8 leading-relaxed text-justify indent-8">{text}</p>;
     }
     
-    let segments: { start: number; end: number; id: string; isAutonomous?: boolean }[] = [];
+    let segments: { start: number; end: number; id: string; isAutonomous?: boolean; author?: 'ai' | 'user' }[] = [];
     paraAnnotations.forEach(anno => {
       let pos = text.indexOf(anno.textSelection);
       while (pos !== -1) {
-        segments.push({ start: pos, end: pos + anno.textSelection.length, id: anno.id, isAutonomous: anno.isAutonomous });
+        segments.push({ 
+          start: pos, 
+          end: pos + anno.textSelection.length, 
+          id: anno.id, 
+          isAutonomous: anno.isAutonomous,
+          author: anno.author 
+        });
         pos = text.indexOf(anno.textSelection, pos + 1);
       }
     });
@@ -192,12 +198,18 @@ const Reader: React.FC<ReaderProps> = ({
       if (seg.start > lastIndex) result.push(text.substring(lastIndex, seg.start));
       const match = text.substring(seg.start, seg.end);
       const isActive = activeAnnotationId === seg.id;
+      const isAI = seg.author === 'ai';
+      
       result.push(
         <span
           key={`${seg.id}-${seg.start}`}
           onClick={(e) => { e.stopPropagation(); onSelectAnnotation(seg.id); }}
           className={`border-b-2 border-dashed cursor-pointer transition-all duration-200 ${
-            isActive ? 'border-amber-500 bg-amber-500/10 font-medium' : seg.isAutonomous ? 'border-purple-300 bg-purple-500/5 hover:border-purple-500' : 'border-stone-400 hover:border-amber-500 hover:bg-amber-50'
+            isActive 
+              ? 'border-amber-500 bg-amber-500/10 font-medium' 
+              : isAI 
+                ? 'border-purple-300 bg-purple-500/5 hover:border-purple-500' // Apply AI style for ALL AI annotations (autonomous or manual)
+                : 'border-stone-400 hover:border-amber-500 hover:bg-amber-50'
           }`}
         >
           {match}
@@ -349,7 +361,7 @@ const Reader: React.FC<ReaderProps> = ({
                              {anno.comment && <i className="fa-solid fa-comment-dots text-stone-300 text-xs"></i>}
                           </div>
                           {anno.comment && (
-                             <div className="mt-2 text-[11px] text-stone-600 line-clamp-2 leading-relaxed">
+                             <div className="mt-2 text-[11px] text-stone-700 leading-relaxed font-medium">
                                 {anno.comment}
                              </div>
                           )}

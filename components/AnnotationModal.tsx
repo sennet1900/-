@@ -122,10 +122,10 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
   const canRecordOnly = !isProcessing && input.trim().length > 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[85vh] overflow-hidden border border-stone-100">
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center sm:p-4 bg-stone-900/40 backdrop-blur-sm">
+      <div className="bg-white w-full max-w-lg flex flex-col max-h-[90dvh] md:max-h-[85vh] overflow-hidden border border-stone-100 rounded-t-3xl md:rounded-2xl shadow-2xl transition-all">
         {/* Header */}
-        <div className="p-4 border-b border-stone-100 flex items-center justify-between bg-stone-50/80 backdrop-blur">
+        <div className="p-4 border-b border-stone-100 flex items-center justify-between bg-stone-50/80 backdrop-blur shrink-0">
           <div className="flex items-center gap-3">
             <Avatar avatar={persona.avatar} className="w-12 h-12 text-2xl" />
             <div>
@@ -158,10 +158,10 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
         </div>
 
         {/* Selected Text (Truncated) */}
-        <div className="bg-stone-50 p-3 border-b border-stone-100 shrink-0 shadow-inner">
+        <div className="bg-stone-50 p-2 border-b border-stone-100 shrink-0 shadow-inner">
           <div 
             onClick={() => setIsTextExpanded(!isTextExpanded)}
-            className={`text-stone-500 italic text-xs md:text-sm border-l-4 border-amber-400 pl-3 cursor-pointer transition-all bg-white p-2 rounded-r-lg ${isTextExpanded ? '' : 'line-clamp-2'}`}
+            className={`text-stone-500 italic text-xs md:text-sm border-l-4 border-amber-400 pl-2 cursor-pointer transition-all bg-white py-1.5 px-3 rounded-r-lg leading-relaxed ${isTextExpanded ? '' : 'line-clamp-2'}`}
             title={isTextExpanded ? "点击折叠" : "点击展开"}
           >
             "{annotation.textSelection}"
@@ -224,7 +224,7 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
         </div>
 
         {/* Input */}
-        <div className="p-3 bg-stone-50 border-t border-stone-200">
+        <div className="p-3 bg-stone-50 border-t border-stone-200 shrink-0 pb-[max(12px,env(safe-area-inset-bottom))]">
           <div className="relative flex items-end gap-2 bg-white rounded-3xl border border-stone-200 px-2 py-2 shadow-sm focus-within:ring-2 focus-within:ring-amber-500/20 focus-within:border-amber-400 transition-all">
             <textarea 
               rows={1}
@@ -240,6 +240,12 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
                       e.preventDefault();
                       handleSend(true);
                   }
+              }}
+              onFocus={() => {
+                 // Try to ensure the modal stays in view on mobile
+                 setTimeout(() => {
+                    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+                 }, 300);
               }}
               placeholder={isOriginal ? `告诉 ${persona.name} 你的想法...` : `回复...`}
               className="w-full bg-transparent border-none py-2 px-3 focus:outline-none text-sm resize-none max-h-[120px] custom-scrollbar"
