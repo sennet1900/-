@@ -7,8 +7,8 @@ interface AnnotationActionModalProps {
   persona: Persona;
   onClose: () => void;
   onUpdate: (id: string, updates: Partial<Annotation>) => void;
-  onTriggerAI: (message: string, history: {role: string, text: string}[]) => void; // New Prop
-  isProcessing?: boolean; // New Prop
+  onTriggerAI: (message: string, history: {role: string, text: string}[]) => void;
+  isProcessing?: boolean;
   engineConfig: EngineConfig;
   isOriginal?: boolean;
 }
@@ -58,11 +58,57 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
     }
   }, [annotation.chatHistory, annotation.comment, annotation.author]);
 
-  // Lock Body Scroll to prevent background lifting/scrolling
+  // 1. Enhanced Body Scroll Lock (iOS Friendly)
   useEffect(() => {
+    // Record current scroll position
+    const scrollY = window.scrollY;
+
+    // Force lock the body in place
+    const originalStyle = {
+      position: document.body.style.position,
+      top: document.body.style.top,
+      width: document.body.style.width,
+      overflow: document.body.style.overflow
+    };
+
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = '100%';
     document.body.style.overflow = 'hidden';
+
     return () => {
-      document.body.style.overflow = '';
+      // Restore styles and scroll position
+      document.body.style.position = originalStyle.position;
+      document.body.style.top = originalStyle.top;
+      document.body.style.width = originalStyle.width;
+      document.body.style.overflow = originalStyle.overflow;
+      window.scrollTo(0, scrollY);
+    };
+  }, []);
+
+  // 2. Visual Viewport Resize Handler
+  const [viewportHeight, setViewportHeight] = useState('100dvh');
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.visualViewport) {
+        const vh = window.visualViewport.height;
+        setViewportHeight(`${vh}px`);
+        document.documentElement.style.setProperty('--vh', `${vh}px`);
+      }
+    };
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleResize);
+      window.visualViewport.addEventListener('scroll', handleResize);
+      handleResize(); // Initial check
+    }
+
+    return () => {
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', handleResize);
+        window.visualViewport.removeEventListener('scroll', handleResize);
+      }
     };
   }, []);
 
@@ -127,11 +173,20 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
   const canRecordOnly = !isProcessing && input.trim().length > 0;
 
   return (
-    // RESTORED: Centered Floating Layout (items-center)
-    // ADDED: h-[100dvh] ensures the container resizes when keyboard opens, so flex-center centers in the *remaining* space
-    // rather than the browser pushing the whole page up.
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/40 backdrop-blur-sm h-[100dvh]">
-      <div className="bg-white w-full max-w-lg flex flex-col max-h-[85%] overflow-hidden border border-stone-100 rounded-2xl shadow-2xl relative animate-scaleIn">
+    // 3. Container Layout: 
+    // - flex-col justify-end (Bottom Sheet style for mobile)
+    // - sm:justify-center (Centered for desktop)
+    // - Height tied to Visual Viewport to avoid keyboard overlap
+    <div 
+      className="fixed inset-0 z-50 flex flex-col justify-end sm:justify-center p-0 sm:p-4 bg-stone-900/40 backdrop-blur-sm transition-all duration-100 ease-out"
+      style={{ height: viewportHeight }}
+    >
+      {/* 4. Modal Card:
+        - max-h-[70vh] on mobile to leave space at top
+        - rounded-t-2xl on mobile (flush bottom)
+        - mx-auto to center horizontally on larger screens
+       */}
+      <div className="bg-white w-full max-w-lg flex flex-col max-h-[70vh] sm:max-h-[85%] overflow-hidden border-t sm:border border-stone-100 rounded-t-2xl sm:rounded-2xl shadow-2xl relative animate-scaleIn mx-auto">
         
         {/* Header */}
         <div className="p-4 border-b border-stone-100 flex items-center justify-between bg-stone-50/80 backdrop-blur shrink-0">
@@ -279,8 +334,8 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
       </div>
       <style>{`
         @keyframes scaleIn {
-          from { opacity: 0; transform: scale(0.95); }
-          to { opacity: 1; transform: scale(1); }
+          from { opacity: 0; transform: scale(0.95) translateY(10px); }
+          to { opacity: 1; transform: scale(1) translateY(0); }
         }
         .animate-scaleIn { animation: scaleIn 0.2s ease-out; }
       `}</style>
