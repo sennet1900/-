@@ -40,48 +40,10 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
   const [messages, setMessages] = useState<{role: string, text: string}[]>([]);
   const [input, setInput] = useState('');
   const [isTextExpanded, setIsTextExpanded] = useState(false);
-  
-  // Refs for scrolling and layout
   const scrollRef = useRef<HTMLDivElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   const annotationFont = engineConfig.customNoteFontName || engineConfig.aiFont;
 
-  // --- 1. DYNAMIC VIEWPORT HEIGHT (The Core Fix) ---
-  // We use this to set the exact height of the modal to match the visible screen area
-  // (which shrinks when the keyboard opens).
-  const [viewportHeight, setViewportHeight] = useState(
-    typeof window !== 'undefined' && window.visualViewport 
-      ? window.visualViewport.height 
-      : '100%'
-  );
-
-  useEffect(() => {
-    if (!window.visualViewport) return;
-
-    const handleResize = () => {
-      // 1. Update height to match the new visual viewport (screen minus keyboard)
-      setViewportHeight(window.visualViewport!.height);
-      
-      // 2. Ensure the top of our app stays at 0 (prevents browser from scrolling the whole page up)
-      window.scrollTo(0, 0);
-
-      // 3. Re-scroll chat to bottom immediately after resize to keep context
-      if (scrollRef.current) {
-        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-      }
-    };
-
-    window.visualViewport.addEventListener('resize', handleResize);
-    window.visualViewport.addEventListener('scroll', handleResize); // Sometimes needed on iOS
-
-    return () => {
-      window.visualViewport?.removeEventListener('resize', handleResize);
-      window.visualViewport?.removeEventListener('scroll', handleResize);
-    };
-  }, []);
-
-  // --- 2. MESSAGE SYNC & AUTO SCROLL ---
   useEffect(() => {
     if (annotation.chatHistory) {
       setMessages(annotation.chatHistory);
@@ -94,22 +56,21 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
     }
   }, [annotation.chatHistory, annotation.comment, annotation.author]);
 
-  // Scroll to bottom whenever messages change or processing starts
+  // --- SCROLL TO BOTTOM ---
   useEffect(() => {
     if (scrollRef.current) {
-      // Use setTimeout to allow layout to paint (especially images or expanding text)
-      setTimeout(() => {
-        if (scrollRef.current) {
-           scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-        }
-      }, 50);
+       // Timeout ensures layout has repainted after keyboard opens or content adds
+       setTimeout(() => {
+          if (scrollRef.current) {
+             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+          }
+       }, 100); 
     }
-  }, [messages, isProcessing, viewportHeight]); // Also scroll when keyboard pops (viewportHeight changes)
+  }, [messages, isProcessing]);
 
-  // --- 3. BODY SCROLL LOCK ---
+  // --- BODY SCROLL LOCK ---
   useEffect(() => {
     const scrollY = window.scrollY;
-    // Lock background scroll
     document.body.style.position = 'fixed';
     document.body.style.top = `-${scrollY}px`;
     document.body.style.width = '100%';
@@ -132,7 +93,6 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
     if (input.trim()) {
       const userMsg = input;
       setInput('');
-      // Reset height of textarea
       const textarea = document.getElementById('chat-input-textarea');
       if (textarea) textarea.style.height = 'auto';
 
@@ -166,28 +126,22 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
   const canRecordOnly = !isProcessing && input.trim().length > 0;
 
   return (
-    // OUTER WRAPPER: Fixed at 0,0.
-    // On Desktop: It's a backdrop.
-    // On Mobile: It acts as the page container.
-    <div 
-      className="fixed inset-0 z-[60] flex flex-col items-center justify-end sm:justify-center bg-white sm:bg-stone-900/60 sm:backdrop-blur-md"
-    >
+    // WRAPPER:
+    // Mobile: fixed inset-0 (Full Screen). flex-col ensures child fills height.
+    // Desktop: centered modal layout.
+    <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center sm:bg-stone-900/60 sm:backdrop-blur-md">
       
-      {/* Desktop Backdrop Click-to-close */}
+      {/* Desktop Backdrop */}
       <div className="absolute inset-0 hidden sm:block" onClick={onClose} />
 
-      {/* MAIN LAYOUT CONTAINER */}
-      {/* Key: Explicitly set height to viewportHeight. */}
-      {/* This ensures that when keyboard opens, this div shrinks, keeping Header at top and Input at bottom. */}
+      {/* CONTENT CONTAINER */}
+      {/* Mobile: w-full h-full (Strictly fills the fixed inset-0 wrapper, which resizes with keyboard) */}
+      {/* Desktop: Fixed size card */}
       <div 
-        ref={containerRef}
-        className="relative w-full sm:h-[85vh] sm:max-w-lg bg-[#f2f2f2] sm:bg-white sm:rounded-2xl sm:shadow-2xl sm:overflow-hidden flex flex-col"
-        style={{ 
-          height: typeof viewportHeight === 'number' ? `${viewportHeight}px` : viewportHeight 
-        }}
+        className="relative w-full h-full sm:h-[85vh] sm:max-w-lg bg-[#f2f2f2] sm:bg-white sm:rounded-2xl sm:shadow-2xl flex flex-col overflow-hidden animate-fadeIn"
       >
         
-        {/* === SECTION 1: HEADER (LOCKED TO TOP) === */}
+        {/* === 1. HEADER (Fixed Top) === */}
         <div className="shrink-0 bg-white border-b border-stone-200 px-4 py-2 flex items-center justify-between shadow-sm z-20 safe-area-top">
           <button 
             onClick={onClose}
@@ -210,7 +164,7 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
           </div>
         </div>
 
-        {/* === SECTION 2: QUOTE (COLLAPSIBLE) === */}
+        {/* === 2. QUOTE (Fixed below Header) === */}
         <div 
            className="shrink-0 bg-white border-b border-stone-200 z-10"
            onClick={() => setIsTextExpanded(!isTextExpanded)}
@@ -224,11 +178,12 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
           </div>
         </div>
 
-        {/* === SECTION 3: CHAT AREA (FLEXIBLE & SCROLLABLE) === */}
+        {/* === 3. CHAT AREA (Flexible Middle) === */}
+        {/* flex-1: Takes all available space between Quote and Input */}
+        {/* min-h-0: Prevents flex child from overflowing parent, enables scrolling */}
         <div 
           ref={scrollRef}
-          className="flex-1 overflow-y-auto p-4 space-y-6 bg-[#f2f2f2] sm:bg-[#f5f5f5]"
-          // iOS momentum scrolling
+          className="flex-1 overflow-y-auto p-4 space-y-6 bg-[#f2f2f2] sm:bg-[#f5f5f5] min-h-0"
           style={{ WebkitOverflowScrolling: 'touch' }} 
         >
           {messages.map((m, i) => {
@@ -277,14 +232,13 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
             </div>
           )}
           
-          {/* Spacer to ensure content isn't flush against input */}
+          {/* Spacer */}
           <div className="h-1"></div>
         </div>
 
-        {/* === SECTION 4: INPUT AREA (LOCKED TO BOTTOM) === */}
-        {/* Because this is the last item in a flex-col, it sits at the bottom. */}
-        {/* When viewport shrinks (keyboard up), this element moves up automatically. */}
-        <div className="shrink-0 bg-[#f8f8f8] sm:bg-white border-t border-stone-200 p-3 z-20">
+        {/* === 4. INPUT AREA (Fixed Bottom) === */}
+        {/* shrink-0: Never collapses. Sticks to bottom of container (top of keyboard). */}
+        <div className="shrink-0 bg-[#f8f8f8] sm:bg-white border-t border-stone-200 p-3 z-20 safe-area-bottom">
           <div className="flex items-end gap-2 bg-white sm:bg-stone-50 rounded-[24px] border border-stone-200 px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-amber-500/10 focus-within:border-amber-400 transition-all">
             <textarea 
               id="chat-input-textarea"
@@ -331,6 +285,7 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
       </div>
       <style>{`
         .safe-area-top { padding-top: env(safe-area-inset-top); }
+        .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
         @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .animate-slideUp { animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
       `}</style>
