@@ -39,17 +39,15 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
 }) => {
   const [messages, setMessages] = useState<{role: string, text: string}[]>([]);
   const [input, setInput] = useState('');
-  const [isTextExpanded, setIsTextExpanded] = useState(false); // State for toggling text truncation
+  const [isTextExpanded, setIsTextExpanded] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Determine annotation font
   const annotationFont = engineConfig.customNoteFontName || engineConfig.aiFont;
 
   useEffect(() => {
     if (annotation.chatHistory) {
       setMessages(annotation.chatHistory);
     } else {
-        // Fallback for very old data or initialization edge cases
         if (annotation.author === 'user') {
              setMessages([{ role: 'user', text: annotation.comment }]);
         } else {
@@ -58,52 +56,50 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
     }
   }, [annotation.chatHistory, annotation.comment, annotation.author]);
 
-  // 3. JS Ultimate Body Lock (As per request)
+  // --- STRONG SCROLL LOCK ---
   useEffect(() => {
-    // Record current scroll position
-    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-
-    // Force lock the body in place
+    const scrollY = window.scrollY;
+    
+    // Lock body
     const originalStyle = {
       position: document.body.style.position,
       top: document.body.style.top,
       width: document.body.style.width,
-      overflow: document.body.style.overflow
+      overflow: document.body.style.overflow,
+      height: document.body.style.height
     };
 
     document.body.style.position = 'fixed';
-    document.body.style.top = `-${scrollTop}px`;
+    document.body.style.top = `-${scrollY}px`;
     document.body.style.width = '100%';
     document.body.style.overflow = 'hidden';
+    document.body.style.height = '100%'; // Ensure full height lock
 
     return () => {
-      // Restore styles and scroll position
       document.body.style.position = originalStyle.position;
       document.body.style.top = originalStyle.top;
       document.body.style.width = originalStyle.width;
       document.body.style.overflow = originalStyle.overflow;
-      window.scrollTo(0, scrollTop);
+      document.body.style.height = originalStyle.height;
+      window.scrollTo(0, scrollY);
     };
   }, []);
 
-  // Visual Viewport Resize Handler (Kept for correct height calc)
-  const [viewportHeight, setViewportHeight] = useState('100dvh');
+  // --- VISUAL VIEWPORT TRACKING ---
+  const [viewportHeight, setViewportHeight] = useState('100%');
 
   useEffect(() => {
     const handleResize = () => {
       if (window.visualViewport) {
-        const vh = window.visualViewport.height;
-        setViewportHeight(`${vh}px`);
-        document.documentElement.style.setProperty('--vh', `${vh}px`);
+        setViewportHeight(`${window.visualViewport.height}px`);
       }
     };
 
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', handleResize);
       window.visualViewport.addEventListener('scroll', handleResize);
-      handleResize(); // Initial check
+      handleResize(); 
     }
-
     return () => {
       if (window.visualViewport) {
         window.visualViewport.removeEventListener('resize', handleResize);
@@ -155,25 +151,30 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
   const canRecordOnly = !isProcessing && input.trim().length > 0;
 
   return (
-    // 2. Touch Action Strategy:
-    // Outer Container: touchAction: 'none' (stops gestures), onTouchMove stopPropagation (isolates event)
     <div 
-      className="fixed inset-0 z-50 flex flex-col justify-end sm:justify-center p-0 sm:p-4 bg-stone-900/40 backdrop-blur-sm transition-all duration-100 ease-out"
-      style={{ height: viewportHeight, touchAction: 'none' }} 
-      onTouchMove={(e) => e.stopPropagation()}
+      className="fixed inset-0 z-50 flex flex-col justify-end sm:justify-center p-0 sm:p-4 bg-stone-900/40 backdrop-blur-sm"
+      style={{ 
+        height: viewportHeight, // Dynamic height matching visual viewport
+        touchAction: 'none'     // CRITICAL: Disable browser handling of gestures on the backdrop
+      }}
+      // Stop events from bubbling to the fixed body
+      onTouchMove={(e) => {
+         if (e.target === e.currentTarget) e.preventDefault();
+         e.stopPropagation();
+      }}
     >
-      {/* 
-         Inner Container: touchAction: 'pan-y' (allows internal scroll), onTouchMove stopPropagation
-         This ensures we can scroll inside this card, but it doesn't leak out.
-      */}
       <div 
-        className="bg-white w-full max-w-lg flex flex-col max-h-[70vh] sm:max-h-[85%] overflow-hidden border-t sm:border border-stone-100 rounded-t-2xl sm:rounded-2xl shadow-2xl relative animate-scaleIn mx-auto"
-        style={{ touchAction: 'pan-y' }}
-        onTouchMove={(e) => e.stopPropagation()}
+        className="bg-white w-full max-w-lg flex flex-col max-h-[70vh] sm:max-h-[85%] overflow-hidden border-t sm:border border-stone-100 rounded-t-2xl sm:rounded-2xl shadow-2xl relative mx-auto"
+        style={{ 
+          touchAction: 'none' // Disable scrolling on the card container (header, borders)
+        }}
       >
         
-        {/* Header */}
-        <div className="p-4 border-b border-stone-100 flex items-center justify-between bg-stone-50/80 backdrop-blur shrink-0">
+        {/* Header - No Scroll */}
+        <div 
+          className="p-4 border-b border-stone-100 flex items-center justify-between bg-stone-50/80 backdrop-blur shrink-0"
+          onTouchMove={(e) => e.stopPropagation()}
+        >
           <div className="flex items-center gap-3">
             <Avatar avatar={persona.avatar} className="w-12 h-12 text-2xl" />
             <div>
@@ -202,8 +203,11 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
           </div>
         </div>
 
-        {/* Selected Text (Truncated) */}
-        <div className="bg-stone-50 p-2 border-b border-stone-100 shrink-0 shadow-inner">
+        {/* Selected Text - No Scroll */}
+        <div 
+          className="bg-stone-50 p-2 border-b border-stone-100 shrink-0 shadow-inner"
+          onTouchMove={(e) => e.stopPropagation()}
+        >
           <div 
             onClick={() => setIsTextExpanded(!isTextExpanded)}
             className={`text-stone-500 italic text-xs md:text-sm border-l-4 border-amber-400 pl-2 cursor-pointer transition-all bg-white py-1.5 px-3 rounded-r-lg leading-relaxed ${isTextExpanded ? '' : 'line-clamp-2'}`}
@@ -213,10 +217,16 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
           </div>
         </div>
 
-        {/* Chat Area - Scrollable */}
+        {/* Chat Area - THE ONLY SCROLLABLE ZONE */}
         <div 
           ref={scrollRef}
-          className="flex-1 overflow-y-auto p-4 space-y-6 bg-[#f2f2f2] overscroll-contain" // Added overscroll-contain
+          className="flex-1 overflow-y-auto p-4 space-y-6 bg-[#f2f2f2] overscroll-contain"
+          style={{ 
+            touchAction: 'pan-y',             // Allow vertical pan only
+            WebkitOverflowScrolling: 'touch'  // Smooth momentum scroll
+          }}
+          onTouchMove={(e) => e.stopPropagation()} // Stop bubbling to prevent parent interference
+          onWheel={(e) => e.stopPropagation()}
         >
           {messages.map((m, i) => {
              const isLast = i === messages.length - 1;
@@ -263,8 +273,11 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
           )}
         </div>
 
-        {/* Input */}
-        <div className="p-3 bg-stone-50 border-t border-stone-200 shrink-0">
+        {/* Input Area - No Scroll */}
+        <div 
+          className="p-3 bg-stone-50 border-t border-stone-200 shrink-0"
+          onTouchMove={(e) => e.stopPropagation()}
+        >
           <div className="relative flex items-end gap-2 bg-white rounded-3xl border border-stone-200 px-2 py-2 shadow-sm focus-within:ring-2 focus-within:ring-amber-500/20 focus-within:border-amber-400 transition-all">
             <textarea 
               rows={1}
