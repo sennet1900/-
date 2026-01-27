@@ -10,13 +10,14 @@ interface WritingStudioModalProps {
 }
 
 const Avatar: React.FC<{ avatar: string; className?: string }> = ({ avatar, className = "w-10 h-10" }) => {
-  const isImage = avatar.startsWith('data:');
+  const safeAvatar = avatar || '👤';
+  const isImage = safeAvatar.startsWith('data:');
   return (
     <div className={`${className} flex items-center justify-center rounded-full overflow-hidden shrink-0`}>
       {isImage ? (
-        <img src={avatar} className="w-full h-full object-cover" alt="Avatar" />
+        <img src={safeAvatar} className="w-full h-full object-cover" alt="Avatar" />
       ) : (
-        <span>{avatar}</span>
+        <span>{safeAvatar}</span>
       )}
     </div>
   );
@@ -253,7 +254,7 @@ const WritingStudioModal: React.FC<WritingStudioModalProps> = ({ activePersona, 
   return (
     <div className="fixed inset-0 z-[150] bg-white flex flex-col animate-fadeIn">
       {/* 1. Header */}
-      <header className="h-14 border-b border-stone-100 flex items-center justify-between px-4 md:px-6 shrink-0 bg-white z-20">
+      <header className="h-[calc(3.5rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] border-b border-stone-100 flex items-center justify-between px-4 md:px-6 shrink-0 bg-white z-20">
         <div className="flex items-center gap-4 flex-1 overflow-hidden">
           <button onClick={onClose} className="text-stone-400 hover:text-stone-900 transition-colors shrink-0">
              <i className="fa-solid fa-arrow-left text-lg"></i>

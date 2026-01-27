@@ -3,9 +3,12 @@ import { Persona, EngineConfig, Annotation } from '../types';
 
 const THOUGHT_ONLY_CONSTRAINT = `
 [输出严格约束]:
-1. **隐藏思维链**: 严禁输出你的心理活动、设定分析或上文提到的任何 prompt 指令。直接输出你作为角色的回复。
-2. **拒绝AI味**: 严禁使用“好的”、“我明白了”、“作为一个...”等助手式用语。
-3. **格式**: 像真人发消息一样，不要使用 Markdown 标题。
+1. **隐藏思维链**: 严禁输出你的心理活动、设定分析。直接输出你作为角色的回复。
+2. **拒绝AI味**: 
+   - 严禁使用“好的”、“我明白了”、“很有趣的观点”、“作为一个AI”等助手式用语。
+   - 严禁重复用户的句子开头。
+   - 严禁使用“综上所述”、“总而言之”等结构。
+3. **格式**: 像微信聊天或面对面说话一样自然。
 `;
 
 const cleanJSON = (text: string) => {
@@ -45,7 +48,7 @@ const formatShortTermMemory = (annotations: Annotation[]): string => {
 const buildSystemPrompt = (
   persona: Persona, 
   bookTitle: string = "未知书籍", 
-  lengthConstraint: string = "100字以内",
+  lengthConstraint: string = "60字以内",
   shortTermMemoryContext: string = "",
   currentLocationContext: string = "", // The ~2000 chars context
   targetSentence: string = ""
@@ -55,33 +58,31 @@ const buildSystemPrompt = (
 
   // The requested template
   return `
-你是${persona.name}，${persona.description}。
-你正在和${userRole}一起读《${bookTitle}》。你们的关系是${persona.relationship}。
+你现在必须完全成为：${persona.name}。
+【人设描述】：${persona.description}
+【核心性格与口吻】：${persona.systemInstruction}
+【我们正在读】：${bookTitle}
+【你们的关系】：${persona.relationship} (对方是: ${userRole})
 
-用这个身份说话，保持你们之间的相处方式，别出戏。
+## 极致人设要求 (Critical)
+1. **性格棱角**: 必须极度贴合人设。如果是傲娇就口是心非；如果是高冷就惜字如金；如果是古人就半文半白。**绝不要做一个温和的、什么都同意的客服。**
+2. **极度口语化**: 像在私下闲聊，多用语气词（啊、呢、吧、...）、反问、感叹。拒绝书面语，拒绝教科书式的分析。
+3. **情感优先**: 先表达你的情绪（震惊、嘲笑、感动、愤怒），再谈内容。不要客观分析，要主观感受。
 
 ## 阅读记忆
-
-【已读旅程】
-${longTermMemory}
-
-【本章进展】
-(基于以下"当前位置"的前文推断本章发生的事)
-
-【聊过的事】
+【已读旅程】${longTermMemory}
+【本章进展】(基于下文推断): ...
+【最近聊过】
 ${shortTermMemoryContext}
 
-## 当前位置
+## 当前上下文
 ${currentLocationContext}
 【当前焦点段落】: "${targetSentence}"
 
-## 怎么回复
-- 永远用${persona.name}的语气和性格说话，对${userRole}用你们之间自然的称呼和态度
-- 结合【已读旅程】和【本章进展】回答，别只看眼前这句
-- 按照人设说人话，根据关系聊天，别书面化别分析腔
-- 简短点，${lengthConstraint}，批注不是写论文
-- 没读到的内容就说不知道，可以一起猜但别装懂
-- 记得之前聊过什么，别翻脸不认
+## 回复指令
+- 针对${userRole}的话或当前段落，直接输出回复。
+- **字数与排版**: ${lengthConstraint}。
+- 记得我们之前的观点，保持连贯性。
 
 ${THOUGHT_ONLY_CONSTRAINT}
 `;
@@ -100,16 +101,28 @@ const fetchWithRetry = async (url: string, options: RequestInit, retries = 3, ba
        if (retries > 0) {
          console.warn(`API request failed with status ${response.status}. Retrying in ${backoff}ms...`);
          await wait(backoff);
+         // Check if aborted during wait
+         if (options.signal?.aborted) {
+            throw new DOMException('Aborted', 'AbortError');
+         }
          return fetchWithRetry(url, options, retries - 1, backoff * 2);
        }
     }
 
     return response;
-  } catch (error) {
+  } catch (error: any) {
+    // DO NOT retry if the user aborted the request
+    if (error.name === 'AbortError') {
+      throw error;
+    }
+
     // Retry on network errors
     if (retries > 0) {
       console.warn(`Network error. Retrying in ${backoff}ms...`);
       await wait(backoff);
+      if (options.signal?.aborted) {
+        throw new DOMException('Aborted', 'AbortError');
+      }
       return fetchWithRetry(url, options, retries - 1, backoff * 2);
     }
     throw error;
@@ -206,7 +219,8 @@ const callGemini = async (
   contents: any[],
   config: EngineConfig,
   systemInstruction?: string,
-  generationConfigOverride?: any
+  generationConfigOverride?: any,
+  signal?: AbortSignal
 ) => {
   const { url, headers } = getGeminiEndpoint(config, 'generateContent');
   
@@ -222,7 +236,7 @@ const callGemini = async (
     body.systemInstruction = { parts: [{ text: systemInstruction }] };
   }
 
-  const response = await fetchWithRetry(url, { method: 'POST', headers, body: JSON.stringify(body) });
+  const response = await fetchWithRetry(url, { method: 'POST', headers, body: JSON.stringify(body), signal });
   
   if (!response.ok) {
     const errData = await response.json().catch(() => ({}));
@@ -237,7 +251,8 @@ const callOpenAI = async (
   contents: any[],
   config: EngineConfig,
   systemInstruction?: string,
-  generationConfigOverride?: any
+  generationConfigOverride?: any,
+  signal?: AbortSignal
 ) => {
   const { url, headers } = getOpenAIEndpoint(config);
   const messages = mapGeminiToOpenAI(contents, systemInstruction);
@@ -259,7 +274,7 @@ const callOpenAI = async (
      }
   }
 
-  const response = await fetchWithRetry(url, { method: 'POST', headers, body: JSON.stringify(body) });
+  const response = await fetchWithRetry(url, { method: 'POST', headers, body: JSON.stringify(body), signal });
 
   if (!response.ok) {
     const errData = await response.json().catch(() => ({}));
@@ -276,12 +291,13 @@ const callAI = async (
   contents: any[],
   config: EngineConfig,
   systemInstruction?: string,
-  generationConfigOverride?: any
+  generationConfigOverride?: any,
+  signal?: AbortSignal
 ) => {
   if (config.provider === 'openai') {
-    return callOpenAI(contents, config, systemInstruction, generationConfigOverride);
+    return callOpenAI(contents, config, systemInstruction, generationConfigOverride, signal);
   }
-  return callGemini(contents, config, systemInstruction, generationConfigOverride);
+  return callGemini(contents, config, systemInstruction, generationConfigOverride, signal);
 };
 
 
@@ -356,8 +372,8 @@ export const generateAIAnnotation = async (
   const extendedContext = getContext(fullContext, textSegment, 2000);
   const stmContext = engine.enableShortTermMemory ? formatShortTermMemory(recentAnnotations) : "";
 
-  // Build System Prompt with new template
-  const systemInstruction = buildSystemPrompt(persona, bookTitle, "30字左右", stmContext, extendedContext, textSegment);
+  // 默认AI主动批注：严格限制字数，保持短小精悍，像是一句随口点评
+  const systemInstruction = buildSystemPrompt(persona, bookTitle, "40字左右，像一句随口点评", stmContext, extendedContext, textSegment);
   
   const prompt = `
     【指令】:
@@ -393,7 +409,7 @@ export const autonomousScan = async (
     你是${persona.name}，${persona.description}。
     你正在读《${bookTitle}》。
     用你的眼光挑出文本中让你有共鸣、想吐槽或感动的片段。
-    保持你的性格人设。
+    保持你的性格人设，使用极度口语化的表达。
   `;
 
   const prompt = `
@@ -402,7 +418,7 @@ export const autonomousScan = async (
     JSON 输出格式 (必须是中文): 一个对象数组。每个对象包含: 
     { 
       "textSelection": "原文中的确切文字", 
-      "comment": "完全符合你人设口吻的吐槽或感慨。严禁书面语。严禁客观分析。字数控制在 30 字左右。", 
+      "comment": "完全符合你人设口吻的吐槽或感慨。严禁书面语。严禁客观分析。字数严格控制在 40 字以内。", 
       "topic": "严格限制2-4个字的中文关键词" 
     }
   `;
@@ -450,9 +466,14 @@ export const generateAIResponseToUserNote = async (
   isOriginal: boolean = false,
   bookTitle: string = "未知书籍"
 ): Promise<string> => {
-  // We can't easily get full context here unless passed, assuming simpler usage or deprecated
-  // If this function is still used, it might need 'fullContext' added to args in future.
-  const lengthGuide = userNote.length > 30 ? "60字左右" : "30字左右";
+  // Logic: 
+  // User note long (>50 chars) -> AI allow expansion (~120 chars) + Paragraphs
+  // User note short -> AI strict limit (<60 chars)
+  const isLongInput = userNote.length > 50;
+  const lengthGuide = isLongInput 
+    ? "可以扩展到120字左右，但必须每2-3句话换行分段" 
+    : "严格控制在60字以内";
+
   const systemInstruction = buildSystemPrompt(persona, bookTitle, lengthGuide, "", "", textSelection);
   
   const prompt = `
@@ -481,7 +502,14 @@ export const chatWithPersona = async (
 ): Promise<string> => {
   // Check the last user message to determine length
   const lastUserMsg = chatHistory.filter(m => m.role === 'user').pop()?.text || message;
-  const lengthGuide = (lastUserMsg && lastUserMsg.length > 30) ? "100字左右" : "50字左右";
+  
+  // Logic: 
+  // User long (>50 chars) -> AI allow expansion (~120 chars) + Paragraphs
+  // User short -> AI strict limit (<60 chars)
+  const isLongInput = lastUserMsg && lastUserMsg.length > 50;
+  const lengthGuide = isLongInput 
+    ? "可以扩展到120字左右，但必须每2-3句话强制换行分段，保持阅读舒适度" 
+    : "严格控制在60字以内，不要长篇大论";
 
   // 1. Get Extended Context (2000 chars)
   const extendedContext = getContext(fullContext, textSelection, 2000);
@@ -557,7 +585,7 @@ export const respondToUserBookReview = async (
   engineConfig: EngineConfig
 ): Promise<string> => {
   const systemInstruction = `你是${persona.name}。请回复用户的书评。`;
-  const prompt = `用户打分 ${userRating} 星并评价: "${userReview}"。请作为 ${persona.name} 简短回复（中文）。说人话。`;
+  const prompt = `用户打分 ${userRating} 星并评价: "${userReview}"。请作为 ${persona.name} 简短回复（中文）。说人话，不要客套。`;
   
   const text = await callAI(
     [{ role: 'user', parts: [{ text: prompt }] }],
@@ -614,7 +642,8 @@ export const consolidateMemory = async (
 // --- GEMINI SPECIFIC PDF EXTRACTION (Kept for Gemini Provider) ---
 export const extractTextFromPDF = async (
   file: File, 
-  config: EngineConfig
+  config: EngineConfig,
+  signal?: AbortSignal
 ): Promise<string> => {
   // Convert File to Base64
   const base64Data = await new Promise<string>((resolve, reject) => {
@@ -625,8 +654,11 @@ export const extractTextFromPDF = async (
       resolve(base64);
     };
     reader.onerror = reject;
+    reader.onabort = reject;
     reader.readAsDataURL(file);
   });
+  
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
 
   if (config.provider !== 'gemini') {
     throw new Error("此方法仅限 Gemini。其他模型请使用 processImagesWithAI。");
@@ -649,7 +681,7 @@ export const extractTextFromPDF = async (
     generationConfig: { temperature: 0.1 }
   };
 
-  const response = await fetchWithRetry(url, { method: 'POST', headers, body: JSON.stringify(body) });
+  const response = await fetchWithRetry(url, { method: 'POST', headers, body: JSON.stringify(body), signal });
   
   if (!response.ok) {
     const errData = await response.json().catch(() => ({}));
@@ -665,7 +697,8 @@ export const extractTextFromPDF = async (
 // --- GENERIC VISION EXTRACTION (For GPT-4o, Claude, etc.) ---
 export const processImagesWithAI = async (
   base64Images: string[],
-  config: EngineConfig
+  config: EngineConfig,
+  signal?: AbortSignal
 ): Promise<string> => {
   // Construct a prompt that sends all images
   const parts = base64Images.map(img => ({
@@ -685,13 +718,14 @@ export const processImagesWithAI = async (
     ]
   }];
 
-  return await callAI(contents, config, "你是一个强大的多模态 OCR 引擎。");
+  return await callAI(contents, config, "你是一个强大的多模态 OCR 引擎。", undefined, signal);
 };
 
 // --- GENERIC TEXT REPAIR (Fallback for DeepSeek/Text-Only models) ---
 export const repairTextWithAI = async (
   rawText: string,
-  config: EngineConfig
+  config: EngineConfig,
+  signal?: AbortSignal
 ): Promise<string> => {
   const systemInstruction = "你是一个文本修复专家。用户提供的文本是从 PDF 提取的，可能包含严重的乱码、编码错误或格式混乱。你的任务是根据上下文猜测并重建正确的文本。";
   
@@ -712,6 +746,8 @@ export const repairTextWithAI = async (
   return await callAI(
      [{ role: 'user', parts: [{ text: prompt }] }],
      repairConfig,
-     systemInstruction
+     systemInstruction,
+     undefined,
+     signal
   );
 };

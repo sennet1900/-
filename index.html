@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <base href="/" />
     
     <!-- PWA / Mobile Standalone Configuration -->
     <title>SoulReader - AI Collaborative Reading</title>
@@ -11,7 +12,7 @@
     
     <!-- iOS support -->
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="SoulReader">
     <link rel="apple-touch-icon" href="https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/1f4d6.png">
     
@@ -32,22 +33,34 @@
         
         /* Disable text selection on UI elements to feel more like an app */
         button, .select-none { user-select: none; -webkit-user-select: none; }
+        
+        /* Loading Animation */
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
 <script type="importmap">
 {
   "imports": {
-    "@google/genai": "https://esm.sh/@google/genai@^1.37.0",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "pdfjs-dist": "https://esm.sh/pdfjs-dist@4.0.379",
+    "pdfjs-dist": "https://esm.sh/pdfjs-dist@^5.4.530",
+    "jszip": "https://esm.sh/jszip@3.10.1",
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "react": "https://esm.sh/react@^19.2.4",
     "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
-    "vite": "https://esm.sh/vite@^7.3.1"
+    "vite": "https://esm.sh/vite@^7.3.1",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/"
   }
 }
 </script>
 </head>
 <body class="bg-stone-50 text-stone-900 overscroll-none">
-    <div id="root"></div>
+    <div id="root">
+        <!-- Native Loading Placeholder (Splash Screen) -->
+        <div style="height: 100vh; width: 100vw; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: #fafaf9; animation: fadeIn 0.3s ease-out;">
+            <div style="width: 48px; height: 48px; border: 3px solid #e7e5e4; border-top-color: #f59e0b; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+            <div style="margin-top: 24px; font-family: 'Crimson Pro', serif; font-size: 20px; font-weight: bold; color: #78716c; letter-spacing: 0.05em;">SoulReader</div>
+            <div style="margin-top: 8px; font-family: sans-serif; font-size: 12px; color: #d6d3d1;">加载心灵书房...</div>
+        </div>
+    </div>
+    <script type="module" src="/index.tsx"></script>
 </body>
 </html>

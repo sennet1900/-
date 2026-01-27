@@ -9,12 +9,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@google/genai": "^1.37.0",
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3",
-    "pdfjs-dist": "4.0.379",
+    "pdfjs-dist": "^5.4.530",
+    "jszip": "3.10.1",
+    "react": "^19.2.4",
     "@vitejs/plugin-react": "^5.1.2",
-    "vite": "^7.3.1"
+    "vite": "^7.3.1",
+    "react-dom": "^19.2.4"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

@@ -20,13 +20,14 @@ interface SidebarProps {
 }
 
 const Avatar: React.FC<{ avatar: string; className?: string }> = ({ avatar, className = "w-10 h-10" }) => {
-  const isImage = avatar.startsWith('data:');
+  const safeAvatar = avatar || '👤';
+  const isImage = safeAvatar.startsWith('data:');
   return (
     <div className={`${className} flex items-center justify-center rounded-full overflow-hidden shrink-0`}>
       {isImage ? (
-        <img src={avatar} className="w-full h-full object-cover" alt="Avatar" />
+        <img src={safeAvatar} className="w-full h-full object-cover" alt="Avatar" />
       ) : (
-        <span>{avatar}</span>
+        <span>{safeAvatar}</span>
       )}
     </div>
   );
@@ -137,7 +138,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <div className="w-full h-full flex flex-col bg-white/90 md:bg-white/50 backdrop-blur-md overflow-hidden relative">
-      <div className="p-4 border-b border-stone-200">
+      <div className="p-4 pt-[calc(1rem+env(safe-area-inset-top))] border-b border-stone-200">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xs font-semibold text-stone-400 uppercase tracking-wider">共读伙伴</h3>
           <div className="flex items-center gap-4">
@@ -222,71 +223,91 @@ const Sidebar: React.FC<SidebarProps> = ({
 
       <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
         {activeTab === 'notes' ? (
-          <div className="space-y-4">
+          <div className="space-y-6">
             {annotations.length === 0 ? (
               <div className="text-center py-10 px-4">
                 <i className="fa-solid fa-feather text-stone-200 text-3xl mb-2"></i>
                 <p className="text-sm text-stone-400 italic">暂无笔记。</p>
               </div>
             ) : (
-              annotations.map(anno => (
-                <div 
-                  key={anno.id} 
-                  onClick={() => {
-                    if (isBatchMode) {
-                      toggleBatchSelection(anno.id);
-                    } else {
-                      onSelectAnnotation(anno.id);
-                    }
-                  }} 
-                  className={`p-3 rounded-xl cursor-pointer transition-all border relative group flex gap-3
-                    ${activeAnnotationId === anno.id && !isBatchMode ? 'bg-amber-50 border-amber-200 shadow-sm ring-1 ring-amber-100' : anno.isAutonomous ? 'bg-purple-50/30 border-purple-100 hover:border-purple-200' : 'bg-white border-stone-100 hover:border-stone-200'} 
-                    ${anno.author === 'user' ? 'border-l-4 border-l-amber-500' : ''}`}
-                >
-                  {isBatchMode && (
-                    <div className="flex items-center justify-center shrink-0">
-                       <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${selectedIds.has(anno.id) ? 'bg-amber-500 border-amber-500 text-white' : 'border-stone-300 bg-white'}`}>
-                          {selectedIds.has(anno.id) && <i className="fa-solid fa-check text-xs"></i>}
-                       </div>
+              sortedDates.map(date => {
+                const isCollapsed = collapsedDates.has(date);
+                return (
+                  <div key={date} className="space-y-2">
+                    {/* Notes Date Header */}
+                    <div 
+                      onClick={() => toggleDateCollapse(date)}
+                      className="flex items-center gap-2 cursor-pointer group select-none py-1"
+                    >
+                      <i className={`fa-solid fa-chevron-down text-[10px] text-stone-300 transition-transform duration-300 ${isCollapsed ? '-rotate-90' : 'rotate-0'}`}></i>
+                      <span className="text-[10px] font-bold text-stone-400 bg-stone-50 px-2 py-0.5 rounded border border-stone-100 group-hover:text-amber-600 transition-colors">{date}</span>
+                      <div className="h-px flex-1 bg-stone-100 group-hover:bg-amber-100 transition-colors"></div>
                     </div>
-                  )}
 
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-2">
-                       <div className="text-[9px] font-mono font-bold text-amber-700 bg-amber-100/50 px-1.5 py-0.5 rounded flex items-center gap-1">
-                          <i className="fa-regular fa-clock text-[8px]"></i>
-                          {new Date(anno.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                       </div>
-                       <div className="flex items-center gap-2">
-                         {/* Processing Indicator */}
-                         {processingAnnotationIds.has(anno.id) && (
-                           <div className="text-[9px] font-bold text-amber-600 flex items-center gap-1 animate-pulse">
-                              <i className="fa-solid fa-spinner animate-spin"></i> 思考中
-                           </div>
-                         )}
-                         {anno.isAutonomous && <div className="text-[9px] font-bold text-purple-600 flex items-center gap-1 bg-purple-100 px-1 rounded"><i className="fa-solid fa-ghost text-[8px]"></i>自动</div>}
-                         {anno.topic && <span className="text-[9px] text-stone-400 truncate max-w-[80px] text-right font-medium">{anno.topic}</span>}
-                       </div>
-                    </div>
-                    
-                    {/* Delete Button (Only active when NOT in batch mode) */}
-                    {!isBatchMode && (
-                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); onDeleteAnnotation(anno.id); }}
-                          className="w-6 h-6 flex items-center justify-center rounded-full bg-stone-100 text-stone-400 hover:bg-red-50 hover:text-red-500 transition-colors"
-                          title="删除批注"
+                    {/* Collapsible Content */}
+                    <div className={`space-y-4 transition-all duration-300 ease-in-out overflow-hidden ${isCollapsed ? 'max-h-0 opacity-0' : 'max-h-[5000px] opacity-100'}`}>
+                      {groupedAnnotations[date].map(anno => (
+                        <div 
+                          key={anno.id} 
+                          onClick={() => {
+                            if (isBatchMode) {
+                              toggleBatchSelection(anno.id);
+                            } else {
+                              onSelectAnnotation(anno.id);
+                            }
+                          }} 
+                          className={`p-3 rounded-xl cursor-pointer transition-all border relative group flex gap-3
+                            ${activeAnnotationId === anno.id && !isBatchMode ? 'bg-amber-50 border-amber-200 shadow-sm ring-1 ring-amber-100' : anno.isAutonomous ? 'bg-purple-50/30 border-purple-100 hover:border-purple-200' : 'bg-white border-stone-100 hover:border-stone-200'} 
+                            ${anno.author === 'user' ? 'border-l-4 border-l-amber-500' : ''}`}
                         >
-                          <i className="fa-solid fa-trash text-[10px]"></i>
-                        </button>
-                      </div>
-                    )}
+                          {isBatchMode && (
+                            <div className="flex items-center justify-center shrink-0">
+                               <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${selectedIds.has(anno.id) ? 'bg-amber-500 border-amber-500 text-white' : 'border-stone-300 bg-white'}`}>
+                                  {selectedIds.has(anno.id) && <i className="fa-solid fa-check text-xs"></i>}
+                               </div>
+                            </div>
+                          )}
 
-                    <div className="text-[10px] text-stone-400 mb-1 italic truncate">"{anno.textSelection}"</div>
-                    <div className="text-sm text-stone-800 line-clamp-2 leading-relaxed" style={{ fontFamily: anno.author === 'user' ? engineConfig.userFont : annotationFont }}>{anno.comment}</div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-2">
+                               <div className="text-[9px] font-mono font-bold text-amber-700 bg-amber-100/50 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                  <i className="fa-regular fa-clock text-[8px]"></i>
+                                  {new Date(anno.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                               </div>
+                               <div className="flex items-center gap-2">
+                                 {/* Processing Indicator */}
+                                 {processingAnnotationIds.has(anno.id) && (
+                                   <div className="text-[9px] font-bold text-amber-600 flex items-center gap-1 animate-pulse">
+                                      <i className="fa-solid fa-spinner animate-spin"></i> 思考中
+                                   </div>
+                                 )}
+                                 {anno.isAutonomous && <div className="text-[9px] font-bold text-purple-600 flex items-center gap-1 bg-purple-100 px-1 rounded"><i className="fa-solid fa-ghost text-[8px]"></i>自动</div>}
+                                 {anno.topic && <span className="text-[9px] text-stone-400 truncate max-w-[80px] text-right font-medium">{anno.topic}</span>}
+                               </div>
+                            </div>
+                            
+                            {/* Delete Button (Only active when NOT in batch mode) */}
+                            {!isBatchMode && (
+                              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); onDeleteAnnotation(anno.id); }}
+                                  className="w-6 h-6 flex items-center justify-center rounded-full bg-stone-100 text-stone-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                                  title="删除批注"
+                                >
+                                  <i className="fa-solid fa-trash text-[10px]"></i>
+                                </button>
+                              </div>
+                            )}
+
+                            <div className="text-[10px] text-stone-400 mb-1 italic truncate">"{anno.textSelection}"</div>
+                            <div className="text-sm text-stone-800 line-clamp-2 leading-relaxed" style={{ fontFamily: anno.author === 'user' ? engineConfig.userFont : annotationFont }}>{anno.comment}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         ) : (

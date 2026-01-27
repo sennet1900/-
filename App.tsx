@@ -54,7 +54,13 @@ const App: React.FC = () => {
 
   // Persist the unified list whenever it changes
   useEffect(() => {
-    localStorage.setItem('sr_active_personas', JSON.stringify(personas));
+    try {
+      localStorage.setItem('sr_active_personas', JSON.stringify(personas));
+    } catch (e) {
+      console.error("Storage Quota Exceeded for Personas", e);
+      // We can't call showToast here easily as it might cause loops, but the catch prevents the white screen.
+      // If critical, we could set a state flag to warn the user.
+    }
   }, [personas]);
 
   const [persona, setPersona] = useState<Persona>(() => {
@@ -183,11 +189,19 @@ const App: React.FC = () => {
   }, [appState, activeBookId]);
 
   useEffect(() => {
-    localStorage.setItem('sr_library', JSON.stringify(library));
+    try {
+      localStorage.setItem('sr_library', JSON.stringify(library));
+    } catch (e) {
+       console.error("Storage limit exceeded for Library", e);
+    }
   }, [library]);
 
   useEffect(() => {
-    localStorage.setItem('sr_annotations', JSON.stringify(annotations));
+    try {
+      localStorage.setItem('sr_annotations', JSON.stringify(annotations));
+    } catch (e) {
+      console.error("Storage limit exceeded for Annotations", e);
+    }
   }, [annotations]);
 
   useEffect(() => {
@@ -252,10 +266,14 @@ const App: React.FC = () => {
       timeSpent: 0,
       isOriginal: false
     };
-    setLibrary(prev => [newBook, ...prev]);
-    setActiveBookId(newBook.id);
-    setAppState('reading');
-    showToast(`已导入 "${title}"`, "success");
+    try {
+      setLibrary(prev => [newBook, ...prev]);
+      setActiveBookId(newBook.id);
+      setAppState('reading');
+      showToast(`已导入 "${title}"`, "success");
+    } catch (e) {
+       showToast("存储空间不足，无法导入。", "error");
+    }
   };
 
   const handleSaveCreatedBook = async (
@@ -269,64 +287,72 @@ const App: React.FC = () => {
     const colors = ['#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ef4444', '#ec4899'];
     const newId = existingId || Date.now().toString();
     
-    if (existingId) {
-      setLibrary(prev => prev.map(b => b.id === existingId ? { ...b, title, content, author, category, writingMetadata } : b));
-      showToast("作品同步成功", "success");
-    } else {
-      const newBook: Book = {
-        id: newId,
-        title,
-        content,
-        author,
-        category,
-        coverColor: colors[Math.floor(Math.random() * colors.length)],
-        addedAt: Date.now(),
-        timeSpent: 0,
-        isOriginal: true,
-        writingMetadata
-      };
-      setLibrary(prev => [newBook, ...prev]);
-      showToast("新作品已创建!", "success");
-    }
-    
-    setIsWritingStudioOpen(false);
-    setActiveBookId(newId);
-    setAppState('reading');
-    
-    if (engineConfig.apiKey || process.env.API_KEY) {
-        setTimeout(async () => {
-        try {
-            const firstPara = content.split('\n')[0] || content;
-            const results = await autonomousScan(firstPara, persona, engineConfig, true, title);
-            if (results && results.length > 0) {
-            const newAnnos: Annotation[] = results.map((r, i) => ({
-                id: (Date.now() + i).toString(),
-                bookId: newId,
-                textSelection: r.textSelection,
-                comment: r.comment,
-                author: 'ai',
-                topic: r.topic,
-                isAutonomous: true,
-                timestamp: Date.now(),
-                personaId: persona.id,
-                position: { startOffset: 0, endOffset: 0 }
-            }));
-            setAnnotations(prev => [...newAnnos, ...prev]);
-            setHasNewThoughts(true); // Notify user without toast
-            }
-        } catch (e) {
-            console.error("Initial scan for user book failed", e);
-        }
-        }, 1500);
+    try {
+      if (existingId) {
+        setLibrary(prev => prev.map(b => b.id === existingId ? { ...b, title, content, author, category, writingMetadata } : b));
+        showToast("作品同步成功", "success");
+      } else {
+        const newBook: Book = {
+          id: newId,
+          title,
+          content,
+          author,
+          category,
+          coverColor: colors[Math.floor(Math.random() * colors.length)],
+          addedAt: Date.now(),
+          timeSpent: 0,
+          isOriginal: true,
+          writingMetadata
+        };
+        setLibrary(prev => [newBook, ...prev]);
+        showToast("新作品已创建!", "success");
+      }
+      
+      setIsWritingStudioOpen(false);
+      setActiveBookId(newId);
+      setAppState('reading');
+      
+      if (engineConfig.apiKey || process.env.API_KEY) {
+          setTimeout(async () => {
+          try {
+              const firstPara = content.split('\n')[0] || content;
+              const results = await autonomousScan(firstPara, persona, engineConfig, true, title);
+              if (results && results.length > 0) {
+              const newAnnos: Annotation[] = results.map((r, i) => ({
+                  id: (Date.now() + i).toString(),
+                  bookId: newId,
+                  textSelection: r.textSelection,
+                  comment: r.comment,
+                  author: 'ai',
+                  topic: r.topic,
+                  isAutonomous: true,
+                  timestamp: Date.now(),
+                  personaId: persona.id,
+                  position: { startOffset: 0, endOffset: 0 }
+              }));
+              setAnnotations(prev => [...newAnnos, ...prev]);
+              setHasNewThoughts(true); // Notify user without toast
+              }
+          } catch (e) {
+              console.error("Initial scan for user book failed", e);
+          }
+          }, 1500);
+      }
+    } catch (e) {
+      showToast("保存失败: 存储空间不足", "error");
     }
   };
 
-  const handlePageChange = useCallback(async (content: string, p: number, pageIndex: number) => {
+  const handlePageChange = useCallback(async (content: string, p: number, pageIndex: number, scrollRatio?: number) => {
     setProgress(p);
     
     if (activeBookId) {
         setLibrary(prev => prev.map(b => 
-            b.id === activeBookId ? { ...b, lastReadPage: pageIndex } : b
+            b.id === activeBookId ? { 
+                ...b, 
+                lastReadPage: pageIndex,
+                lastScrollRatio: scrollRatio !== undefined ? scrollRatio : b.lastScrollRatio
+            } : b
         ));
     }
 
@@ -658,26 +684,30 @@ const App: React.FC = () => {
   const activeAnnotation = annotations.find(a => a.id === activeAnnotationId);
 
   const handleSavePersona = (p: Persona) => {
-    setPersonas(prev => {
-      const exists = prev.find(item => item.id === p.id);
-      if (exists) {
-        return prev.map(item => item.id === p.id ? p : item);
-      } else {
-        return [...prev, p];
+    try {
+      setPersonas(prev => {
+        const exists = prev.find(item => item.id === p.id);
+        if (exists) {
+          return prev.map(item => item.id === p.id ? p : item);
+        } else {
+          return [...prev, p];
+        }
+      });
+      // Immediately select if it's new or currently active
+      if (p.id === persona.id || personas.length === 0) {
+          setPersona(p);
       }
-    });
-    // Immediately select if it's new or currently active
-    if (p.id === persona.id || personas.length === 0) {
-        setPersona(p);
+      
+      if (activeBookId) {
+        setLibrary(prev => prev.map(b => 
+          b.id === activeBookId ? { ...b, lastPersonaId: p.id } : b
+        ));
+      }
+      
+      setIsPersonaModalOpen(false);
+    } catch (e) {
+      showToast("无法保存: 图片可能太大 (限制 5MB)", "error");
     }
-    
-    if (activeBookId) {
-      setLibrary(prev => prev.map(b => 
-        b.id === activeBookId ? { ...b, lastPersonaId: p.id } : b
-      ));
-    }
-    
-    setIsPersonaModalOpen(false);
   };
 
   const handleDeletePersona = (id: string) => {
@@ -755,7 +785,7 @@ const App: React.FC = () => {
         />
       ) : (
         <>
-          <header className="h-14 border-b border-stone-200 flex items-center justify-between px-6 glass shrink-0 z-10">
+          <header className="h-[calc(3.5rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] border-b border-stone-200 flex items-center justify-between px-6 glass shrink-0 z-10">
             <div className="flex items-center gap-4">
               <button onClick={() => setAppState('library')} className="text-stone-400 hover:text-stone-900 transition-colors flex items-center gap-2 text-sm font-medium">
                 <i className="fa-solid fa-book-bookmark"></i>

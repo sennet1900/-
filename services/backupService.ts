@@ -59,6 +59,25 @@ export const downloadBackupFile = () => {
   URL.revokeObjectURL(url);
 };
 
+// Helper function to merge lists, keeping local items if IDs conflict
+const mergeLists = <T extends { id: string }>(localList: T[], backupList: T[]): T[] => {
+    const map = new Map<string, T>();
+    
+    // 1. Load local items first (Precedence: Local)
+    localList.forEach(item => {
+        if (item && item.id) map.set(item.id, item);
+    });
+
+    // 2. Add backup items ONLY if they don't exist locally
+    backupList.forEach(item => {
+        if (item && item.id && !map.has(item.id)) {
+            map.set(item.id, item);
+        }
+    });
+
+    return Array.from(map.values());
+};
+
 export const restoreFromJSON = async (jsonString: string): Promise<boolean> => {
   try {
     const data: any = JSON.parse(jsonString);
@@ -68,31 +87,38 @@ export const restoreFromJSON = async (jsonString: string): Promise<boolean> => {
     if (!data.annotations || !Array.isArray(data.annotations)) throw new Error("无效的批注数据 (Invalid Annotations Data)");
 
     // --- Restore Library (Books & Writing Studio) ---
-    // Writing Studio data is nested in book.writingMetadata. JSON.parse preserves this automatically.
-    localStorage.setItem('sr_library', JSON.stringify(data.library));
+    // MERGE LOGIC: Keep local books, add new ones from backup
+    const currentLibrary: Book[] = JSON.parse(localStorage.getItem('sr_library') || '[]');
+    const backupLibrary: Book[] = data.library;
+    const mergedLibrary = mergeLists(currentLibrary, backupLibrary);
+    localStorage.setItem('sr_library', JSON.stringify(mergedLibrary));
 
     // --- Restore Annotations ---
-    localStorage.setItem('sr_annotations', JSON.stringify(data.annotations));
+    // MERGE LOGIC: Keep local annotations, add new ones from backup
+    const currentAnnotations: Annotation[] = JSON.parse(localStorage.getItem('sr_annotations') || '[]');
+    const backupAnnotations: Annotation[] = data.annotations;
+    const mergedAnnotations = mergeLists(currentAnnotations, backupAnnotations);
+    localStorage.setItem('sr_annotations', JSON.stringify(mergedAnnotations));
 
     // --- Restore Personas ---
     // Handle migration from V1 backups (which used 'customPersonas') to V2 (which uses 'activePersonas')
-    let personasToRestore = [];
+    let personasToRestore: Persona[] = [];
     if (data.activePersonas && Array.isArray(data.activePersonas)) {
         personasToRestore = data.activePersonas;
     } else if (data.customPersonas && Array.isArray(data.customPersonas)) {
-        // If restoring an old backup, we put custom personas into the active slot.
-        // Note: This might lose "default assistant" memory if the old backup didn't include it, 
-        // but App.tsx will merge defaults back in if missing.
         personasToRestore = data.customPersonas;
     }
     
     if (personasToRestore.length > 0) {
-        localStorage.setItem('sr_active_personas', JSON.stringify(personasToRestore));
+        const currentPersonas: Persona[] = JSON.parse(localStorage.getItem('sr_active_personas') || '[]');
+        const mergedPersonas = mergeLists(currentPersonas, personasToRestore);
+        localStorage.setItem('sr_active_personas', JSON.stringify(mergedPersonas));
     }
 
     // --- Restore Config ---
+    // MERGE LOGIC: Keep local config dominant, only add missing keys from backup
     const currentConfig = JSON.parse(localStorage.getItem('sr_engine_config') || '{}');
-    const newConfig = { ...currentConfig, ...data.engineConfig };
+    const newConfig = { ...data.engineConfig, ...currentConfig }; // Local (currentConfig) overwrites backup keys
     localStorage.setItem('sr_engine_config', JSON.stringify(newConfig));
 
     return true;

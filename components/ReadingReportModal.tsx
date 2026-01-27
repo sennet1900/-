@@ -22,13 +22,14 @@ interface SoulReportData {
 }
 
 const Avatar: React.FC<{ avatar: string; className?: string }> = ({ avatar, className = "w-10 h-10" }) => {
-  const isImage = avatar.startsWith('data:');
+  const safeAvatar = avatar || '👤';
+  const isImage = safeAvatar.startsWith('data:');
   return (
     <div className={`${className} flex items-center justify-center rounded-full overflow-hidden shrink-0`}>
       {isImage ? (
-        <img src={avatar} className="w-full h-full object-cover" alt="Avatar" />
+        <img src={safeAvatar} className="w-full h-full object-cover" alt="Avatar" />
       ) : (
-        <span>{avatar}</span>
+        <span>{safeAvatar}</span>
       )}
     </div>
   );
@@ -102,7 +103,7 @@ const ReadingReportModal: React.FC<ReadingReportModalProps> = ({ book, annotatio
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-stone-900/80 backdrop-blur-xl">
       <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] overflow-hidden border border-stone-200 relative">
-        <button onClick={onClose} className="absolute right-8 top-8 w-10 h-10 flex items-center justify-center rounded-full hover:bg-stone-100 text-stone-400 z-10">
+        <button onClick={onClose} className="absolute right-8 top-[calc(2rem+env(safe-area-inset-top))] w-10 h-10 flex items-center justify-center rounded-full hover:bg-stone-100 text-stone-400 z-10">
           <i className="fa-solid fa-xmark"></i>
         </button>
 

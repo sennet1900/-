@@ -15,13 +15,14 @@ interface AnnotationActionModalProps {
 }
 
 const Avatar: React.FC<{ avatar: string; className?: string }> = ({ avatar, className = "w-10 h-10" }) => {
-  const isImage = avatar.startsWith('data:');
+  const safeAvatar = avatar || '👤';
+  const isImage = safeAvatar.startsWith('data:');
   return (
-    <div className={`${className} flex items-center justify-center rounded-full overflow-hidden shrink-0 bg-white`}>
+    <div className={`${className} flex items-center justify-center rounded-full overflow-hidden shrink-0 bg-stone-100 border border-stone-200/50 shadow-sm`}>
       {isImage ? (
-        <img src={avatar} className="w-full h-full object-cover" alt="Avatar" />
+        <img src={safeAvatar} className="w-full h-full object-cover" alt="Avatar" />
       ) : (
-        <span>{avatar}</span>
+        <span className="text-lg">{safeAvatar}</span>
       )}
     </div>
   );
@@ -41,6 +42,7 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
   const [input, setInput] = useState('');
   const [isTextExpanded, setIsTextExpanded] = useState(false); // State for toggling text truncation
   const initialized = useRef(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   // Determine annotation font
   const annotationFont = engineConfig.customNoteFontName || engineConfig.aiFont;
@@ -58,10 +60,12 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
     }
   }, [annotation.chatHistory, annotation.comment, annotation.author]);
 
-  // Handle initialization of User-authored notes that don't have AI response yet
-  // MOVED: This logic should ideally be handled by App.tsx upon creation, 
-  // but if we open an old note that never got a reply, we might want to trigger it here?
-  // For now, we assume App.tsx handles new creation flows.
+  // Auto scroll to bottom
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages, isProcessing]);
   
   const handleSend = async (triggerAI: boolean) => {
     if (isProcessing) return;
@@ -119,34 +123,45 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[80vh] overflow-hidden border border-stone-100">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[85vh] overflow-hidden border border-stone-100">
         {/* Header */}
-        <div className="p-4 border-b border-stone-100 flex items-center justify-between bg-stone-50/30">
+        <div className="p-4 border-b border-stone-100 flex items-center justify-between bg-stone-50/80 backdrop-blur">
           <div className="flex items-center gap-3">
-            <Avatar avatar={persona.avatar} className="w-12 h-12 text-3xl border border-stone-200" />
+            <Avatar avatar={persona.avatar} className="w-12 h-12 text-2xl" />
             <div>
               <div className="flex items-center gap-2">
-                <h4 className="font-bold text-stone-800">{persona.name}</h4>
+                <h4 className="font-bold text-stone-900 text-base">{persona.name}</h4>
                 <div className="text-[9px] font-mono font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded flex items-center gap-1">
                   <i className="fa-regular fa-heart"></i>
                   {isOriginal ? '心灵连接' : '共读中'}
                 </div>
               </div>
-              <p className="text-[10px] text-stone-400 uppercase tracking-widest">
-                {isOriginal ? `关于你作品的灵魂对话` : '共同探索这段文字'}
+              <p className="text-[10px] text-stone-400 uppercase tracking-widest truncate max-w-[200px]">
+                {persona.role} · {persona.relationship}
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-stone-100 rounded-full text-stone-400 transition-colors">
-            <i className="fa-solid fa-xmark"></i>
-          </button>
+          
+          <div className="flex items-center gap-3">
+             {/* User Avatar Here */}
+             <div className="flex flex-col items-end mr-1">
+                 <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">{persona.userIdentity || '你'}</span>
+                 <Avatar avatar={persona.userAvatar || '👤'} className="w-8 h-8 text-sm" />
+             </div>
+             
+             <div className="h-8 w-px bg-stone-200"></div>
+
+             <button onClick={onClose} className="w-8 h-8 flex items-center justify-center hover:bg-stone-200 rounded-full text-stone-400 transition-colors">
+                <i className="fa-solid fa-xmark text-lg"></i>
+             </button>
+          </div>
         </div>
 
         {/* Selected Text (Truncated) */}
-        <div className="bg-stone-50/50 p-4 border-b border-stone-100 shrink-0">
+        <div className="bg-stone-50 p-3 border-b border-stone-100 shrink-0 shadow-inner">
           <div 
             onClick={() => setIsTextExpanded(!isTextExpanded)}
-            className={`text-stone-500 italic text-sm border-l-2 border-amber-300 pl-3 cursor-pointer transition-all ${isTextExpanded ? '' : 'line-clamp-2'}`}
+            className={`text-stone-500 italic text-xs md:text-sm border-l-4 border-amber-400 pl-3 cursor-pointer transition-all bg-white p-2 rounded-r-lg ${isTextExpanded ? '' : 'line-clamp-2'}`}
             title={isTextExpanded ? "点击折叠" : "点击展开"}
           >
             "{annotation.textSelection}"
@@ -154,22 +169,26 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
         </div>
 
         {/* Chat Area */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-white">
+        <div 
+          ref={scrollRef}
+          className="flex-1 overflow-y-auto p-4 space-y-6 bg-[#f2f2f2]" // Using a slight grey bg for chat feel
+        >
           {messages.map((m, i) => {
              const isLast = i === messages.length - 1;
              const isAI = m.role === 'model';
              return (
-              <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} items-end gap-2 group`}>
-                {isAI && <Avatar avatar={persona.avatar} className="w-6 h-6 text-[10px] mb-1" />}
+              <div key={i} className={`flex w-full ${isAI ? 'justify-start' : 'justify-end'} items-start gap-3 group`}>
+                {/* AI Avatar (Left) */}
+                {isAI && <Avatar avatar={persona.avatar} className="w-10 h-10 text-xl mt-0.5" />}
                 
-                <div className="relative">
+                <div className={`relative max-w-[75%] ${isAI ? '' : ''}`}>
                   <div 
-                    className={`max-w-[85%] p-3 rounded-2xl text-sm shadow-sm ${
-                      m.role === 'user' 
-                        ? 'bg-amber-600 text-white rounded-tr-none' 
-                        : 'bg-stone-100 text-stone-800 rounded-tl-none border border-stone-200'
+                    className={`px-4 py-3 text-sm shadow-sm leading-relaxed whitespace-pre-wrap ${
+                      isAI 
+                        ? 'bg-white text-stone-800 rounded-2xl rounded-tl-[2px] border border-stone-200' 
+                        : 'bg-[#95ec69] text-stone-900 rounded-2xl rounded-tr-[2px] border border-[#8ad961]' // WeChat Green-ish
                     }`}
-                    style={{ fontFamily: m.role === 'user' ? engineConfig.userFont : annotationFont }}
+                    style={{ fontFamily: !isAI ? engineConfig.userFont : annotationFont }}
                   >
                     {m.text}
                   </div>
@@ -178,61 +197,74 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
                   {isLast && isAI && !isProcessing && (
                      <button 
                        onClick={handleRewrite}
-                       className="absolute -right-10 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-stone-300 hover:text-amber-500 hover:rotate-180 transition-all rounded-full"
+                       className="absolute -right-8 top-2 w-6 h-6 flex items-center justify-center text-stone-300 hover:text-amber-500 hover:rotate-180 transition-all rounded-full opacity-0 group-hover:opacity-100"
                        title="重写回复"
                      >
-                       <i className="fa-solid fa-rotate-right"></i>
+                       <i className="fa-solid fa-rotate-right text-xs"></i>
                      </button>
                   )}
                 </div>
 
-                {!isAI && <Avatar avatar={persona.userAvatar || '👤'} className="w-6 h-6 text-[10px] mb-1 border border-stone-100 bg-stone-50" />}
+                {/* User Avatar Removed from Here */}
               </div>
              );
           })}
           
+          {/* Loading Indicator */}
           {isProcessing && (
-            <div className="flex justify-start items-end gap-2">
-              <Avatar avatar={persona.avatar} className="w-6 h-6 text-[10px] mb-1" />
-              <div className="bg-stone-100 p-3 rounded-2xl rounded-tl-none flex gap-1 border border-stone-200">
-                <div className="w-1.5 h-1.5 bg-stone-300 rounded-full animate-bounce"></div>
-                <div className="w-1.5 h-1.5 bg-stone-300 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                <div className="w-1.5 h-1.5 bg-stone-300 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+            <div className="flex justify-start items-start gap-3 animate-fadeIn">
+              <Avatar avatar={persona.avatar} className="w-10 h-10 text-xl mt-0.5" />
+              <div className="bg-white p-4 rounded-2xl rounded-tl-[2px] flex gap-1.5 border border-stone-200 shadow-sm items-center h-10">
+                <div className="w-1.5 h-1.5 bg-stone-400 rounded-full animate-bounce"></div>
+                <div className="w-1.5 h-1.5 bg-stone-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                <div className="w-1.5 h-1.5 bg-stone-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
               </div>
             </div>
           )}
         </div>
 
         {/* Input */}
-        <div className="p-4 bg-stone-50 border-t border-stone-100">
-          <div className="relative flex items-center">
-            <input 
-              type="text"
+        <div className="p-3 bg-stone-50 border-t border-stone-200">
+          <div className="relative flex items-end gap-2 bg-white rounded-3xl border border-stone-200 px-2 py-2 shadow-sm focus-within:ring-2 focus-within:ring-amber-500/20 focus-within:border-amber-400 transition-all">
+            <textarea 
+              rows={1}
               value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSend(true)}
-              placeholder={isOriginal ? `告诉 ${persona.name} 这段文字背后的心跳...` : `继续我们的对话...`}
-              className="w-full bg-white border border-stone-200 rounded-full py-3 px-5 pr-24 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-sm"
+              onChange={(e) => {
+                  setInput(e.target.value);
+                  // Auto-grow
+                  e.target.style.height = 'auto';
+                  e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+              }}
+              onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSend(true);
+                  }
+              }}
+              placeholder={isOriginal ? `告诉 ${persona.name} 你的想法...` : `回复...`}
+              className="w-full bg-transparent border-none py-2 px-3 focus:outline-none text-sm resize-none max-h-[120px] custom-scrollbar"
+              style={{ minHeight: '36px' }}
             />
-            <div className="absolute right-2 flex items-center gap-1">
+            
+            <div className="flex items-center gap-1 pb-1">
+               {/* Record Only (Right Button) */}
+              <button 
+                onClick={() => handleSend(false)}
+                disabled={!canRecordOnly}
+                className="w-8 h-8 flex items-center justify-center bg-stone-100 text-stone-400 rounded-full hover:bg-stone-200 disabled:opacity-30 transition-colors"
+                title="仅记录笔记 (不回复)"
+              >
+                <i className="fa-solid fa-pen text-xs"></i>
+              </button>
+
               {/* Send and Reply (Left Button) */}
               <button 
                 onClick={() => handleSend(true)}
                 disabled={!canTriggerAI}
-                className="p-2 bg-amber-600 text-white rounded-full hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                title="发送并获取 AI 回复 (或让 AI 回复之前的内容)"
+                className="w-8 h-8 flex items-center justify-center bg-amber-500 text-white rounded-full hover:bg-amber-600 disabled:opacity-50 disabled:bg-stone-300 transition-colors shadow-md"
+                title="发送"
               >
                 <i className="fa-solid fa-paper-plane text-xs"></i>
-              </button>
-
-              {/* Record Only (Right Button) */}
-              <button 
-                onClick={() => handleSend(false)}
-                disabled={!canRecordOnly}
-                className="p-2 bg-stone-200 text-stone-500 rounded-full hover:bg-stone-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                title="仅记录笔记 (不回复)"
-              >
-                <i className="fa-solid fa-check text-xs"></i>
               </button>
             </div>
           </div>

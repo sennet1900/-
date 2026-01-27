@@ -9,7 +9,8 @@ interface ReaderProps {
   activeAnnotationId: string | null;
   onSelectAnnotation: (id: string) => void;
   readingMode: 'vertical' | 'horizontal';
-  onPageChange?: (pageContent: string, progress: number, pageIndex: number) => void;
+  // Updated signature to include scrollRatio
+  onPageChange?: (pageContent: string, progress: number, pageIndex: number, scrollRatio?: number) => void;
   engineConfig: EngineConfig;
   onUpdateConfig: (config: EngineConfig) => void;
 }
@@ -39,6 +40,7 @@ const Reader: React.FC<ReaderProps> = ({
   const [showToolbarPanel, setShowToolbarPanel] = useState<'none' | 'notes' | 'stats' | 'theme' | 'font'>('none');
   const [tempSelection, setTempSelection] = useState<string | null>(null); // State for current text selection
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Split content into pages based on paragraphs
   const pages = useMemo(() => {
@@ -62,29 +64,64 @@ const Reader: React.FC<ReaderProps> = ({
     return Math.round(((currentPage + 1) / pages.length) * 100);
   }, [currentPage, pages.length]);
 
+  // Horizontal Mode: Update progress on page flip
   useEffect(() => {
-    if (pages[currentPage]) {
+    if (readingMode === 'horizontal' && pages[currentPage]) {
       onPageChange?.(pages[currentPage].join('\n'), progressPercent, currentPage);
     }
-  }, [currentPage, pages, onPageChange, progressPercent]);
+  }, [currentPage, pages, onPageChange, progressPercent, readingMode]);
 
-  useEffect(() => {
-    if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTop = 0;
-    }
-  }, [currentPage, book.id]);
+  // Vertical Mode: Handle Scroll & Save Progress
+  const handleScroll = () => {
+    if (readingMode !== 'vertical' || !scrollContainerRef.current) return;
+    
+    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
 
-  // Restore progress on book open
+    scrollTimeoutRef.current = setTimeout(() => {
+       if (!scrollContainerRef.current) return;
+       const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+       if (scrollHeight <= clientHeight) return;
+       
+       const ratio = scrollTop / (scrollHeight - clientHeight);
+       const content = pages[0]?.join('\n') || '';
+       const progress = Math.round(ratio * 100);
+       
+       // For vertical, we pass 0 as pageIndex, but include scrollRatio
+       onPageChange?.(content, progress, 0, ratio);
+    }, 500); 
+  };
+
+  // Restore progress on book open or mode switch
   useEffect(() => {
     const savedPage = book.lastReadPage || 0;
-    // Basic bounds check to prevent crashing if font/layout changed drastically
-    // Note: pages is calculated from useMemo, so it's available.
-    if (pages.length > 0 && savedPage < pages.length) {
-       setCurrentPage(savedPage);
+    
+    if (readingMode === 'horizontal') {
+        if (pages.length > 0 && savedPage < pages.length) {
+            setCurrentPage(savedPage);
+        } else {
+            setCurrentPage(0);
+        }
+        // Reset scroll for horizontal page
+        if (scrollContainerRef.current) {
+            scrollContainerRef.current.scrollTop = 0;
+        }
     } else {
-       setCurrentPage(0);
+        // Vertical Mode Restoration
+        setCurrentPage(0);
+        
+        if (book.lastScrollRatio !== undefined && scrollContainerRef.current) {
+            // Delay slightly to ensure content layout is ready
+            setTimeout(() => {
+                if (scrollContainerRef.current) {
+                    const { scrollHeight, clientHeight } = scrollContainerRef.current;
+                    scrollContainerRef.current.scrollTop = book.lastScrollRatio! * (scrollHeight - clientHeight);
+                }
+            }, 100);
+        } else if (scrollContainerRef.current) {
+             scrollContainerRef.current.scrollTop = 0;
+        }
     }
-  }, [book.id, readingMode, pages.length]); // Re-run if ID, mode, or page count changes
+  }, [book.id, readingMode, pages.length]); 
 
   // Handle Text Selection (Mobile & Desktop Friendly)
   useEffect(() => {
@@ -202,6 +239,7 @@ const Reader: React.FC<ReaderProps> = ({
       <div 
         className="w-full h-full overflow-y-auto overflow-x-hidden flex flex-col items-center custom-reader-scroll relative z-10 scroll-smooth" 
         ref={scrollContainerRef}
+        onScroll={handleScroll}
       >
         <div 
           key={`${book.id}-page-${currentPage}`} 

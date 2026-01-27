@@ -93,6 +93,7 @@ export interface Book {
   addedAt: number;
   timeSpent: number; 
   lastReadPage?: number; // Persist reading progress
+  lastScrollRatio?: number; // NEW: Persist vertical scroll progress
   lastPersonaId?: string; // NEW: Tracks the last used persona for this specific book
   rating?: number;   
   userReview?: string;

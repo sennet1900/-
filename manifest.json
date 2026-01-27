@@ -2,7 +2,8 @@
 {
   "name": "SoulReader",
   "short_name": "SoulReader",
-  "start_url": "./",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#fafaf9",
   "theme_color": "#fafaf9",

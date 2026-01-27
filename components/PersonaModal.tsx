@@ -48,33 +48,76 @@ const PersonaModal: React.FC<PersonaModalProps> = ({
     }
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 1024 * 1024) { // 1MB Limit
-        alert("图片过大，请选择 1MB 以下的图片。");
-        return;
-      }
+  // Image Compression Utility
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve) => {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData({...formData, avatar: reader.result as string});
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_SIZE = 200; // Resize to max 200px
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_SIZE) {
+              height *= MAX_SIZE / width;
+              width = MAX_SIZE;
+            }
+          } else {
+            if (height > MAX_SIZE) {
+              width *= MAX_SIZE / height;
+              height = MAX_SIZE;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            // Compress to JPEG 0.7 quality
+            resolve(canvas.toDataURL('image/jpeg', 0.7)); 
+          } else {
+             resolve(e.target?.result as string); // Fallback
+          }
+        };
+        img.src = e.target?.result as string;
       };
       reader.readAsDataURL(file);
+    });
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) { 
+        alert("图片过大，请选择 5MB 以下的图片。");
+        return;
+      }
+      try {
+        const compressed = await compressImage(file);
+        setFormData({...formData, avatar: compressed});
+      } catch (err) {
+        console.error("Image compression failed", err);
+      }
     }
   };
 
-  const handleUserImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUserImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 1024 * 1024) { // 1MB Limit
-        alert("图片过大，请选择 1MB 以下的图片。");
+       if (file.size > 5 * 1024 * 1024) { 
+        alert("图片过大，请选择 5MB 以下的图片。");
         return;
       }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData({...formData, userAvatar: reader.result as string});
-      };
-      reader.readAsDataURL(file);
+      try {
+        const compressed = await compressImage(file);
+        setFormData({...formData, userAvatar: compressed});
+      } catch (err) {
+        console.error("Image compression failed", err);
+      }
     }
   };
 
@@ -98,7 +141,8 @@ const PersonaModal: React.FC<PersonaModalProps> = ({
   };
 
   const renderAvatarPreview = (src: string, onClick: () => void, isUser: boolean = false) => {
-    const isImage = src.startsWith('data:');
+    const safeSrc = src || '👤';
+    const isImage = safeSrc.startsWith('data:');
     return (
       <div 
         onClick={onClick}
@@ -107,9 +151,9 @@ const PersonaModal: React.FC<PersonaModalProps> = ({
         `}
       >
         {isImage ? (
-          <img src={src} className="w-full h-full object-cover" alt="Preview" />
+          <img src={safeSrc} className="w-full h-full object-cover" alt="Preview" />
         ) : (
-          <span className={isUser ? "text-2xl" : "text-3xl"}>{src}</span>
+          <span className={isUser ? "text-2xl" : "text-3xl"}>{safeSrc}</span>
         )}
         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
           <i className="fa-solid fa-camera text-white"></i>
