@@ -56,55 +56,21 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
     }
   }, [annotation.chatHistory, annotation.comment, annotation.author]);
 
-  // --- STRONG SCROLL LOCK ---
+  // --- STRICT BODY LOCK ---
+  // Since we are taking over the full screen, we lock the body completely.
   useEffect(() => {
     const scrollY = window.scrollY;
-    
-    // Lock body
-    const originalStyle = {
-      position: document.body.style.position,
-      top: document.body.style.top,
-      width: document.body.style.width,
-      overflow: document.body.style.overflow,
-      height: document.body.style.height
-    };
-
     document.body.style.position = 'fixed';
     document.body.style.top = `-${scrollY}px`;
     document.body.style.width = '100%';
     document.body.style.overflow = 'hidden';
-    document.body.style.height = '100%'; // Ensure full height lock
 
     return () => {
-      document.body.style.position = originalStyle.position;
-      document.body.style.top = originalStyle.top;
-      document.body.style.width = originalStyle.width;
-      document.body.style.overflow = originalStyle.overflow;
-      document.body.style.height = originalStyle.height;
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      document.body.style.overflow = '';
       window.scrollTo(0, scrollY);
-    };
-  }, []);
-
-  // --- VISUAL VIEWPORT TRACKING ---
-  const [viewportHeight, setViewportHeight] = useState('100%');
-
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.visualViewport) {
-        setViewportHeight(`${window.visualViewport.height}px`);
-      }
-    };
-
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', handleResize);
-      window.visualViewport.addEventListener('scroll', handleResize);
-      handleResize(); 
-    }
-    return () => {
-      if (window.visualViewport) {
-        window.visualViewport.removeEventListener('resize', handleResize);
-        window.visualViewport.removeEventListener('scroll', handleResize);
-      }
     };
   }, []);
 
@@ -151,95 +117,74 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
   const canRecordOnly = !isProcessing && input.trim().length > 0;
 
   return (
-    <div 
-      className="fixed inset-0 z-50 flex flex-col justify-end sm:justify-center p-0 sm:p-4 bg-stone-900/40 backdrop-blur-sm"
-      style={{ 
-        height: viewportHeight, // Dynamic height matching visual viewport
-        touchAction: 'none'     // CRITICAL: Disable browser handling of gestures on the backdrop
-      }}
-      // Stop events from bubbling to the fixed body
-      onTouchMove={(e) => {
-         if (e.target === e.currentTarget) e.preventDefault();
-         e.stopPropagation();
-      }}
-    >
+    // FULL SCREEN WRAPPER
+    // Mobile: Occupies fixed inset-0 with solid background (looks like a page)
+    // Desktop: Semi-transparent backdrop with centered modal
+    <div className="fixed inset-0 z-[60] flex flex-col items-center justify-end sm:justify-center sm:bg-stone-900/60 sm:backdrop-blur-md">
+      
+      {/* Desktop Backdrop Click-to-close */}
+      <div className="absolute inset-0 hidden sm:block" onClick={onClose} />
+
+      {/* MAIN CONTAINER */}
       <div 
-        className="bg-white w-full max-w-lg flex flex-col max-h-[70vh] sm:max-h-[85%] overflow-hidden border-t sm:border border-stone-100 rounded-t-2xl sm:rounded-2xl shadow-2xl relative mx-auto"
-        style={{ 
-          touchAction: 'none' // Disable scrolling on the card container (header, borders)
-        }}
+        className="relative w-full h-[100dvh] sm:h-[85vh] sm:max-w-lg bg-[#f2f2f2] sm:bg-white sm:rounded-2xl sm:shadow-2xl sm:overflow-hidden flex flex-col animate-fadeIn"
       >
         
-        {/* Header - No Scroll */}
-        <div 
-          className="p-4 border-b border-stone-100 flex items-center justify-between bg-stone-50/80 backdrop-blur shrink-0"
-          onTouchMove={(e) => e.stopPropagation()}
-        >
-          <div className="flex items-center gap-3">
-            <Avatar avatar={persona.avatar} className="w-12 h-12 text-2xl" />
-            <div>
-              <div className="flex items-center gap-2">
-                <h4 className="font-bold text-stone-900 text-base">{persona.name}</h4>
-                <div className="text-[9px] font-mono font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded flex items-center gap-1">
-                  <i className="fa-regular fa-heart"></i>
-                  {isOriginal ? '心灵连接' : '共读中'}
-                </div>
-              </div>
-              <p className="text-[10px] text-stone-400 uppercase tracking-widest truncate max-w-[200px]">
-                {persona.role} · {persona.relationship}
-              </p>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-3">
-             <div className="flex flex-col items-end mr-1">
-                 <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">{persona.userIdentity || '你'}</span>
-                 <Avatar avatar={persona.userAvatar || '👤'} className="w-8 h-8 text-sm" />
-             </div>
-             <div className="h-8 w-px bg-stone-200"></div>
-             <button onClick={onClose} className="w-8 h-8 flex items-center justify-center hover:bg-stone-200 rounded-full text-stone-400 transition-colors">
-                <i className="fa-solid fa-xmark text-lg"></i>
-             </button>
-          </div>
-        </div>
-
-        {/* Selected Text - No Scroll */}
-        <div 
-          className="bg-stone-50 p-2 border-b border-stone-100 shrink-0 shadow-inner"
-          onTouchMove={(e) => e.stopPropagation()}
-        >
-          <div 
-            onClick={() => setIsTextExpanded(!isTextExpanded)}
-            className={`text-stone-500 italic text-xs md:text-sm border-l-4 border-amber-400 pl-2 cursor-pointer transition-all bg-white py-1.5 px-3 rounded-r-lg leading-relaxed ${isTextExpanded ? '' : 'line-clamp-2'}`}
-            title={isTextExpanded ? "点击折叠" : "点击展开"}
+        {/* 1. HEADER (Page-Like) */}
+        <div className="shrink-0 bg-white border-b border-stone-200 px-4 py-2 flex items-center justify-between shadow-sm z-20 safe-area-top">
+          <button 
+            onClick={onClose}
+            className="w-10 h-10 -ml-2 flex items-center justify-center rounded-full text-stone-500 hover:bg-stone-100 active:scale-95 transition-all"
           >
-            "{annotation.textSelection}"
+             {/* Down arrow for mobile "sheet" feel, X for desktop */}
+             <i className="fa-solid fa-chevron-down sm:hidden text-lg"></i>
+             <i className="fa-solid fa-xmark hidden sm:block text-lg"></i>
+          </button>
+
+          <div className="flex flex-col items-center">
+            <div className="flex items-center gap-1.5">
+               <span className="text-sm font-bold text-stone-900">{persona.name}</span>
+               {isOriginal && <i className="fa-solid fa-heart text-amber-500 text-[10px]"></i>}
+            </div>
+            <span className="text-[10px] text-stone-400 font-medium">{persona.role}</span>
+          </div>
+
+          <div className="w-10 flex justify-end">
+            <Avatar avatar={persona.avatar} className="w-9 h-9 border border-stone-100" />
           </div>
         </div>
 
-        {/* Chat Area - THE ONLY SCROLLABLE ZONE */}
+        {/* 2. QUOTE CONTEXT (Collapsible) */}
+        <div 
+           className="shrink-0 bg-white border-b border-stone-200 z-10"
+           onClick={() => setIsTextExpanded(!isTextExpanded)}
+        >
+          <div className="px-4 py-3 flex gap-3 items-start cursor-pointer hover:bg-stone-50 transition-colors">
+             <div className="w-1 self-stretch bg-amber-400 rounded-full shrink-0 my-1"></div>
+             <div className={`flex-1 text-stone-600 text-sm leading-relaxed italic ${isTextExpanded ? '' : 'line-clamp-2'}`}>
+                "{annotation.textSelection}"
+             </div>
+             <i className={`fa-solid fa-caret-down text-stone-300 text-xs mt-1 transition-transform ${isTextExpanded ? 'rotate-180' : ''}`}></i>
+          </div>
+        </div>
+
+        {/* 3. CHAT AREA (Scrollable) */}
         <div 
           ref={scrollRef}
-          className="flex-1 overflow-y-auto p-4 space-y-6 bg-[#f2f2f2] overscroll-contain"
-          style={{ 
-            touchAction: 'pan-y',             // Allow vertical pan only
-            WebkitOverflowScrolling: 'touch'  // Smooth momentum scroll
-          }}
-          onTouchMove={(e) => e.stopPropagation()} // Stop bubbling to prevent parent interference
-          onWheel={(e) => e.stopPropagation()}
+          className="flex-1 overflow-y-auto p-4 space-y-6 bg-[#f2f2f2] sm:bg-[#f5f5f5]"
         >
           {messages.map((m, i) => {
              const isLast = i === messages.length - 1;
              const isAI = m.role === 'model';
              return (
-              <div key={i} className={`flex w-full ${isAI ? 'justify-start' : 'justify-end'} items-start gap-3 group`}>
-                {isAI && <Avatar avatar={persona.avatar} className="w-10 h-10 text-xl mt-0.5" />}
+              <div key={i} className={`flex w-full ${isAI ? 'justify-start' : 'justify-end'} items-start gap-3 group animate-slideUp`}>
+                {isAI && <Avatar avatar={persona.avatar} className="w-9 h-9 mt-1 shadow-sm" />}
                 
                 <div className={`relative max-w-[85%] ${isAI ? '' : ''}`}>
                   <div 
-                    className={`px-4 py-3 text-sm shadow-sm leading-relaxed whitespace-pre-wrap ${
+                    className={`px-4 py-3 text-[15px] leading-relaxed whitespace-pre-wrap shadow-sm ${
                       isAI 
-                        ? 'bg-white text-stone-800 rounded-2xl rounded-tl-[2px] border border-stone-200' 
+                        ? 'bg-white text-stone-800 rounded-2xl rounded-tl-[2px] border border-stone-200/50' 
                         : 'bg-[#95ec69] text-stone-900 rounded-2xl rounded-tr-[2px] border border-[#8ad961]' 
                     }`}
                     style={{ fontFamily: !isAI ? engineConfig.userFont : annotationFont }}
@@ -248,13 +193,15 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
                   </div>
                   
                   {isLast && isAI && !isProcessing && (
-                     <button 
-                       onClick={handleRewrite}
-                       className="absolute -right-8 top-2 w-6 h-6 flex items-center justify-center text-stone-300 hover:text-amber-500 hover:rotate-180 transition-all rounded-full opacity-0 group-hover:opacity-100"
-                       title="重写回复"
-                     >
-                       <i className="fa-solid fa-rotate-right text-xs"></i>
-                     </button>
+                     <div className="absolute -right-8 top-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                       <button 
+                         onClick={handleRewrite}
+                         className="w-6 h-6 flex items-center justify-center text-stone-300 hover:text-amber-500 bg-white rounded-full shadow-sm"
+                         title="重写"
+                       >
+                         <i className="fa-solid fa-rotate-right text-xs"></i>
+                       </button>
+                     </div>
                   )}
                 </div>
               </div>
@@ -263,22 +210,22 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
           
           {isProcessing && (
             <div className="flex justify-start items-start gap-3 animate-fadeIn">
-              <Avatar avatar={persona.avatar} className="w-10 h-10 text-xl mt-0.5" />
-              <div className="bg-white p-4 rounded-2xl rounded-tl-[2px] flex gap-1.5 border border-stone-200 shadow-sm items-center h-10">
+              <Avatar avatar={persona.avatar} className="w-9 h-9 mt-1" />
+              <div className="bg-white p-4 rounded-2xl rounded-tl-[2px] flex gap-1.5 border border-stone-200/50 shadow-sm items-center h-10">
                 <div className="w-1.5 h-1.5 bg-stone-400 rounded-full animate-bounce"></div>
                 <div className="w-1.5 h-1.5 bg-stone-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
                 <div className="w-1.5 h-1.5 bg-stone-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
               </div>
             </div>
           )}
+          
+          {/* Bottom spacer for safe scroll */}
+          <div className="h-2"></div>
         </div>
 
-        {/* Input Area - No Scroll */}
-        <div 
-          className="p-3 bg-stone-50 border-t border-stone-200 shrink-0"
-          onTouchMove={(e) => e.stopPropagation()}
-        >
-          <div className="relative flex items-end gap-2 bg-white rounded-3xl border border-stone-200 px-2 py-2 shadow-sm focus-within:ring-2 focus-within:ring-amber-500/20 focus-within:border-amber-400 transition-all">
+        {/* 4. INPUT AREA (Fixed) */}
+        <div className="shrink-0 bg-[#f8f8f8] sm:bg-white border-t border-stone-200 p-3 safe-area-bottom z-20">
+          <div className="flex items-end gap-2 bg-white sm:bg-stone-50 rounded-[24px] border border-stone-200 px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-amber-500/10 focus-within:border-amber-400 transition-all">
             <textarea 
               rows={1}
               value={input}
@@ -294,38 +241,38 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
                   }
               }}
               placeholder={isOriginal ? `告诉 ${persona.name} 你的想法...` : `回复...`}
-              className="w-full bg-transparent border-none py-2 px-3 focus:outline-none text-sm resize-none max-h-[120px] custom-scrollbar"
-              style={{ minHeight: '36px' }}
+              className="flex-1 bg-transparent border-none py-2 px-1 focus:outline-none text-[15px] resize-none max-h-[120px]"
+              style={{ minHeight: '40px' }}
             />
             
-            <div className="flex items-center gap-1 pb-1">
+            <div className="flex items-center gap-2 pb-1.5 pr-1">
               <button 
                 onClick={() => handleSend(false)}
                 disabled={!canRecordOnly}
-                className="w-8 h-8 flex items-center justify-center bg-stone-100 text-stone-400 rounded-full hover:bg-stone-200 disabled:opacity-30 transition-colors"
-                title="仅记录笔记 (不回复)"
+                className="w-8 h-8 flex items-center justify-center text-stone-400 hover:text-stone-600 hover:bg-stone-200 rounded-full transition-colors"
+                title="仅记录"
               >
-                <i className="fa-solid fa-pen text-xs"></i>
+                <i className="fa-solid fa-pen text-sm"></i>
               </button>
 
               <button 
                 onClick={() => handleSend(true)}
                 disabled={!canTriggerAI}
-                className="w-8 h-8 flex items-center justify-center bg-amber-500 text-white rounded-full hover:bg-amber-600 disabled:opacity-50 disabled:bg-stone-300 transition-colors shadow-md"
+                className="w-8 h-8 flex items-center justify-center bg-amber-500 text-white rounded-full shadow-md hover:bg-amber-600 active:scale-95 disabled:opacity-50 disabled:shadow-none disabled:bg-stone-300 transition-all"
                 title="发送"
               >
-                <i className="fa-solid fa-paper-plane text-xs"></i>
+                <i className="fa-solid fa-paper-plane text-xs translate-x-px translate-y-px"></i>
               </button>
             </div>
           </div>
         </div>
+
       </div>
       <style>{`
-        @keyframes scaleIn {
-          from { opacity: 0; transform: scale(0.95) translateY(10px); }
-          to { opacity: 1; transform: scale(1) translateY(0); }
-        }
-        .animate-scaleIn { animation: scaleIn 0.2s ease-out; }
+        .safe-area-top { padding-top: env(safe-area-inset-top); }
+        .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-slideUp { animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
       `}</style>
     </div>
   );
