@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Annotation, Persona, EngineConfig } from '../types';
-import { chatWithPersona, generateAIResponseToUserNote } from '../services/geminiService';
 
 interface AnnotationActionModalProps {
   annotation: Annotation;
@@ -41,7 +40,6 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
   const [messages, setMessages] = useState<{role: string, text: string}[]>([]);
   const [input, setInput] = useState('');
   const [isTextExpanded, setIsTextExpanded] = useState(false); // State for toggling text truncation
-  const initialized = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Determine annotation font
@@ -116,14 +114,15 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
 
   // Determine if Send button should be enabled
   const lastMessageIsUser = messages.length > 0 && messages[messages.length - 1].role === 'user';
-  const lastMessageIsModel = messages.length > 0 && messages[messages.length - 1].role === 'model';
   
   const canTriggerAI = !isProcessing && (input.trim().length > 0 || lastMessageIsUser);
   const canRecordOnly = !isProcessing && input.trim().length > 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center sm:p-4 bg-stone-900/40 backdrop-blur-sm">
-      <div className="bg-white w-full max-w-lg flex flex-col max-h-[90dvh] md:max-h-[85vh] overflow-hidden border border-stone-100 rounded-t-3xl md:rounded-2xl shadow-2xl transition-all">
+    // Changed positioning: items-start pt-20 on mobile to anchor top and prevent jumping when keyboard opens
+    <div className="fixed inset-0 z-50 flex justify-center items-start pt-20 md:items-center md:pt-0 p-4 bg-stone-900/40 backdrop-blur-sm">
+      <div className="bg-white w-full max-w-lg flex flex-col max-h-[85vh] overflow-hidden border border-stone-100 rounded-2xl shadow-2xl relative animate-scaleIn">
+        
         {/* Header */}
         <div className="p-4 border-b border-stone-100 flex items-center justify-between bg-stone-50/80 backdrop-blur shrink-0">
           <div className="flex items-center gap-3">
@@ -181,7 +180,7 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
                 {/* AI Avatar (Left) */}
                 {isAI && <Avatar avatar={persona.avatar} className="w-10 h-10 text-xl mt-0.5" />}
                 
-                <div className={`relative max-w-[75%] ${isAI ? '' : ''}`}>
+                <div className={`relative max-w-[85%] ${isAI ? '' : ''}`}>
                   <div 
                     className={`px-4 py-3 text-sm shadow-sm leading-relaxed whitespace-pre-wrap ${
                       isAI 
@@ -204,8 +203,6 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
                      </button>
                   )}
                 </div>
-
-                {/* User Avatar Removed from Here */}
               </div>
              );
           })}
@@ -224,7 +221,7 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
         </div>
 
         {/* Input */}
-        <div className="p-3 bg-stone-50 border-t border-stone-200 shrink-0 pb-[max(12px,env(safe-area-inset-bottom))]">
+        <div className="p-3 bg-stone-50 border-t border-stone-200 shrink-0">
           <div className="relative flex items-end gap-2 bg-white rounded-3xl border border-stone-200 px-2 py-2 shadow-sm focus-within:ring-2 focus-within:ring-amber-500/20 focus-within:border-amber-400 transition-all">
             <textarea 
               rows={1}
@@ -240,12 +237,6 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
                       e.preventDefault();
                       handleSend(true);
                   }
-              }}
-              onFocus={() => {
-                 // Try to ensure the modal stays in view on mobile
-                 setTimeout(() => {
-                    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-                 }, 300);
               }}
               placeholder={isOriginal ? `告诉 ${persona.name} 你的想法...` : `回复...`}
               className="w-full bg-transparent border-none py-2 px-3 focus:outline-none text-sm resize-none max-h-[120px] custom-scrollbar"
@@ -276,6 +267,13 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
           </div>
         </div>
       </div>
+      <style>{`
+        @keyframes scaleIn {
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        .animate-scaleIn { animation: scaleIn 0.2s ease-out; }
+      `}</style>
     </div>
   );
 };

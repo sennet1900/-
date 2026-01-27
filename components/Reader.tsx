@@ -71,6 +71,34 @@ const Reader: React.FC<ReaderProps> = ({
     }
   }, [currentPage, pages, onPageChange, progressPercent, readingMode]);
 
+  // Handle auto-navigation to active annotation (e.g. from Sidebar click)
+  useEffect(() => {
+    if (activeAnnotationId && annotations.length > 0) {
+      const targetAnno = annotations.find(a => a.id === activeAnnotationId);
+      if (targetAnno) {
+        // 1. Find which page contains this text
+        const pageIndex = pages.findIndex(pageLines => 
+          pageLines.join('\n').includes(targetAnno.textSelection)
+        );
+
+        if (pageIndex !== -1) {
+           // 2. Change page if needed
+           if (pageIndex !== currentPage) {
+             setCurrentPage(pageIndex);
+           }
+           
+           // 3. Scroll text into view (wait for render)
+           setTimeout(() => {
+              const el = document.getElementById(`anno-${targetAnno.id}`);
+              if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }
+           }, 300);
+        }
+      }
+    }
+  }, [activeAnnotationId, annotations, pages]); // Intentionally not including currentPage to avoid loops
+
   // Vertical Mode: Handle Scroll & Save Progress
   const handleScroll = () => {
     if (readingMode !== 'vertical' || !scrollContainerRef.current) return;
@@ -202,6 +230,7 @@ const Reader: React.FC<ReaderProps> = ({
       
       result.push(
         <span
+          id={`anno-${seg.id}`} // Added ID for scroll targeting
           key={`${seg.id}-${seg.start}`}
           onClick={(e) => { e.stopPropagation(); onSelectAnnotation(seg.id); }}
           className={`border-b-2 border-dashed cursor-pointer transition-all duration-200 ${
@@ -340,10 +369,21 @@ const Reader: React.FC<ReaderProps> = ({
                           key={anno.id}
                           onClick={() => {
                              onSelectAnnotation(anno.id);
+                             setShowToolbarPanel('none'); // Close toolbar to show context
+
                              // Auto-jump logic: find the page that contains this text selection
                              const pageIndex = pages.findIndex(p => p.join('\n').includes(anno.textSelection));
-                             if (pageIndex !== -1 && pageIndex !== currentPage) {
-                               setCurrentPage(pageIndex);
+                             if (pageIndex !== -1) {
+                               if (pageIndex !== currentPage) {
+                                 setCurrentPage(pageIndex);
+                               }
+                               // Explicitly trigger scroll logic
+                               setTimeout(() => {
+                                  const el = document.getElementById(`anno-${anno.id}`);
+                                  if (el) {
+                                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                  }
+                               }, 300);
                              }
                           }}
                           className={`p-3 rounded-xl border cursor-pointer transition-all ${activeAnnotationId === anno.id ? 'bg-amber-50 border-amber-200 shadow-sm' : 'bg-stone-50 border-stone-100 hover:border-stone-200'}`}
