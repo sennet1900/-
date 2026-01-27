@@ -150,7 +150,7 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
           </div>
 
           <div className="w-10 flex justify-end">
-            <Avatar avatar={persona.avatar} className="w-9 h-9 border border-stone-100" />
+            <Avatar avatar={persona.userAvatar || '👤'} className="w-9 h-9 border border-stone-100" />
           </div>
         </div>
 
