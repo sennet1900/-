@@ -58,6 +58,14 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
     }
   }, [annotation.chatHistory, annotation.comment, annotation.author]);
 
+  // Lock Body Scroll to prevent background lifting/scrolling
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, []);
+
   // Auto scroll to bottom
   useEffect(() => {
     if (scrollRef.current) {
@@ -119,9 +127,11 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
   const canRecordOnly = !isProcessing && input.trim().length > 0;
 
   return (
-    // Changed positioning: items-start pt-20 on mobile to anchor top and prevent jumping when keyboard opens
-    <div className="fixed inset-0 z-50 flex justify-center items-start pt-20 md:items-center md:pt-0 p-4 bg-stone-900/40 backdrop-blur-sm">
-      <div className="bg-white w-full max-w-lg flex flex-col max-h-[85vh] overflow-hidden border border-stone-100 rounded-2xl shadow-2xl relative animate-scaleIn">
+    // RESTORED: Centered Floating Layout (items-center)
+    // ADDED: h-[100dvh] ensures the container resizes when keyboard opens, so flex-center centers in the *remaining* space
+    // rather than the browser pushing the whole page up.
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/40 backdrop-blur-sm h-[100dvh]">
+      <div className="bg-white w-full max-w-lg flex flex-col max-h-[85%] overflow-hidden border border-stone-100 rounded-2xl shadow-2xl relative animate-scaleIn">
         
         {/* Header */}
         <div className="p-4 border-b border-stone-100 flex items-center justify-between bg-stone-50/80 backdrop-blur shrink-0">
