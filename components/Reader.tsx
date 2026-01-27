@@ -9,7 +9,7 @@ interface ReaderProps {
   activeAnnotationId: string | null;
   onSelectAnnotation: (id: string) => void;
   readingMode: 'vertical' | 'horizontal';
-  onPageChange?: (pageContent: string, progress: number) => void;
+  onPageChange?: (pageContent: string, progress: number, pageIndex: number) => void;
   engineConfig: EngineConfig;
   onUpdateConfig: (config: EngineConfig) => void;
 }
@@ -64,7 +64,7 @@ const Reader: React.FC<ReaderProps> = ({
 
   useEffect(() => {
     if (pages[currentPage]) {
-      onPageChange?.(pages[currentPage].join('\n'), progressPercent);
+      onPageChange?.(pages[currentPage].join('\n'), progressPercent, currentPage);
     }
   }, [currentPage, pages, onPageChange, progressPercent]);
 
@@ -74,9 +74,17 @@ const Reader: React.FC<ReaderProps> = ({
     }
   }, [currentPage, book.id]);
 
+  // Restore progress on book open
   useEffect(() => {
-    setCurrentPage(0);
-  }, [book.id, readingMode]);
+    const savedPage = book.lastReadPage || 0;
+    // Basic bounds check to prevent crashing if font/layout changed drastically
+    // Note: pages is calculated from useMemo, so it's available.
+    if (pages.length > 0 && savedPage < pages.length) {
+       setCurrentPage(savedPage);
+    } else {
+       setCurrentPage(0);
+    }
+  }, [book.id, readingMode, pages.length]); // Re-run if ID, mode, or page count changes
 
   // Handle Text Selection (Mobile & Desktop Friendly)
   useEffect(() => {
@@ -202,7 +210,7 @@ const Reader: React.FC<ReaderProps> = ({
           {currentPage === 0 && (
             <div className="mb-12 border-b border-stone-200/20 pb-8">
               <h1 className="text-3xl md:text-5xl font-serif font-bold mb-4 leading-tight">{book.title}</h1>
-              {book.author && <p className="opacity-60 italic text-lg">By {book.author}</p>}
+              {book.author && <p className="opacity-60 italic text-lg">作者: {book.author}</p>}
             </div>
           )}
           
@@ -270,11 +278,11 @@ const Reader: React.FC<ReaderProps> = ({
                 {showToolbarPanel === 'notes' && (
                   <div className="space-y-4 py-2">
                     <div className="text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">
-                       All Annotations ({annotations.length})
+                       全部批注 ({annotations.length})
                     </div>
                     {annotations.length === 0 ? (
                       <div className="text-center text-stone-400 py-8 italic text-xs border-2 border-dashed border-stone-100 rounded-xl">
-                        No thoughts recorded yet.<br/>Select text to begin.
+                        暂无想法记录。<br/>选中文字即可开始。
                       </div>
                     ) : (
                       annotations.map(anno => (
@@ -296,7 +304,7 @@ const Reader: React.FC<ReaderProps> = ({
                           <div className="flex items-center justify-between mt-2">
                              <div className="flex items-center gap-2">
                                 <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${anno.author === 'ai' ? 'bg-amber-100 text-amber-700' : 'bg-stone-200 text-stone-600'}`}>
-                                   {anno.author === 'ai' ? 'AI' : 'You'}
+                                   {anno.author === 'ai' ? 'AI' : '你'}
                                 </span>
                                 <span className="text-[10px] text-stone-400">{new Date(anno.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                              </div>
@@ -317,11 +325,11 @@ const Reader: React.FC<ReaderProps> = ({
                   <div className="space-y-6 py-2">
                     <div className="flex items-center justify-between px-2">
                        <div className="flex flex-col">
-                         <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Progress</span>
+                         <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">进度</span>
                          <span className="text-3xl font-serif font-bold text-stone-800">{progressPercent}%</span>
                        </div>
                        <div className="text-right">
-                         <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Page</span>
+                         <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">页码</span>
                          <div className="text-xl font-serif font-bold text-amber-600">{currentPage + 1} <span className="text-stone-300 text-sm">/ {pages.length}</span></div>
                        </div>
                     </div>
@@ -383,19 +391,19 @@ const Reader: React.FC<ReaderProps> = ({
                       </div>
                     )}
                     <div className="mt-4 pt-4 border-t border-stone-100 flex items-center justify-between">
-                       <span className="text-xs font-bold text-stone-600">Reading Mode</span>
+                       <span className="text-xs font-bold text-stone-600">阅读模式</span>
                        <div className="flex bg-stone-100 p-1 rounded-xl">
                           <button 
                             onClick={() => onUpdateConfig({...engineConfig, readingMode: 'horizontal'})}
                             className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${engineConfig.readingMode === 'horizontal' ? 'bg-white shadow text-amber-600' : 'text-stone-400'}`}
                           >
-                             <i className="fa-solid fa-book-open mr-1"></i> Paged
+                             <i className="fa-solid fa-book-open mr-1"></i> 翻页
                           </button>
                           <button 
                             onClick={() => onUpdateConfig({...engineConfig, readingMode: 'vertical'})}
                             className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${engineConfig.readingMode === 'vertical' ? 'bg-white shadow text-amber-600' : 'text-stone-400'}`}
                           >
-                             <i className="fa-solid fa-scroll mr-1"></i> Scroll
+                             <i className="fa-solid fa-scroll mr-1"></i> 滚动
                           </button>
                        </div>
                     </div>

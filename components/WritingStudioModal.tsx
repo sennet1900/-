@@ -35,35 +35,35 @@ const InitScreen: React.FC<{
     <div className="flex flex-col h-full items-center justify-center p-8 bg-stone-50 animate-fadeIn">
       <div className="w-full max-w-md bg-white p-8 rounded-3xl shadow-xl border border-stone-200">
         <div className="text-center mb-8">
-           <h2 className="text-2xl font-serif font-bold text-stone-900">Create New Work</h2>
-           <p className="text-stone-400 text-sm mt-2">Begin your journey in the Ink Studio.</p>
+           <h2 className="text-2xl font-serif font-bold text-stone-900">开启新创作</h2>
+           <p className="text-stone-400 text-sm mt-2">在水墨工坊开始你的旅程。</p>
         </div>
         <div className="space-y-6">
            <div className="space-y-2">
-              <label className="text-xs font-bold text-stone-400 uppercase tracking-wider">Book Title</label>
+              <label className="text-xs font-bold text-stone-400 uppercase tracking-wider">作品标题</label>
               <input 
                 autoFocus
                 type="text" 
                 value={title}
                 onChange={e => setTitle(e.target.value)}
-                placeholder="e.g. The Silent Sea"
+                placeholder="例如: 寂静之海"
                 className="w-full bg-stone-50 border border-stone-200 rounded-xl py-3 px-4 focus:ring-2 focus:ring-amber-500/20 focus:outline-none focus:border-amber-500 font-serif text-lg"
               />
            </div>
            <div className="space-y-2">
-              <label className="text-xs font-bold text-stone-400 uppercase tracking-wider">Author Name</label>
+              <label className="text-xs font-bold text-stone-400 uppercase tracking-wider">笔名</label>
               <input 
                 type="text" 
                 value={author}
                 onChange={e => setAuthor(e.target.value)}
-                placeholder="Your Pen Name"
+                placeholder="你的笔名"
                 className="w-full bg-stone-50 border border-stone-200 rounded-xl py-3 px-4 focus:ring-2 focus:ring-amber-500/20 focus:outline-none focus:border-amber-500"
               />
            </div>
            <div className="space-y-2">
-              <label className="text-xs font-bold text-stone-400 uppercase tracking-wider">Category</label>
+              <label className="text-xs font-bold text-stone-400 uppercase tracking-wider">分类</label>
               <div className="flex flex-wrap gap-2">
-                 {['Novel', 'Fanfic', 'Essay', 'Script'].map(cat => (
+                 {['小说', '同人', '随笔', '剧本'].map(cat => (
                     <button 
                       key={cat}
                       onClick={() => setCategory(cat)}
@@ -75,13 +75,13 @@ const InitScreen: React.FC<{
               </div>
            </div>
            <div className="flex gap-4 pt-4">
-              <button onClick={onClose} className="flex-1 py-3 text-stone-500 font-bold hover:bg-stone-100 rounded-xl transition-all">Cancel</button>
+              <button onClick={onClose} className="flex-1 py-3 text-stone-500 font-bold hover:bg-stone-100 rounded-xl transition-all">取消</button>
               <button 
                 onClick={() => onStart(title, author, category)}
                 disabled={!title.trim() || !author.trim()}
                 className="flex-[2] py-3 bg-stone-900 text-white font-bold rounded-xl shadow-lg hover:bg-stone-800 disabled:opacity-50 transition-all"
               >
-                Start Writing
+                开始写作
               </button>
            </div>
         </div>
@@ -142,6 +142,12 @@ const WritingStudioModal: React.FC<WritingStudioModalProps> = ({ activePersona, 
     }
   }, [isInit, metadata.chapters]);
 
+  // Derived state to control mobile view switching
+  // We show the editor if we are in a blueprint section OR if a specific chapter is selected.
+  const isEditorActive = useMemo(() => {
+    return activeChapterId !== null || activeSection !== 'chapter';
+  }, [activeChapterId, activeSection]);
+
   // Content Editing
   const currentContent = useMemo(() => {
     if (activeSection === 'chapter') {
@@ -161,7 +167,7 @@ const WritingStudioModal: React.FC<WritingStudioModalProps> = ({ activePersona, 
     setIsInit(false);
     const firstChapter = {
       id: Date.now().toString(),
-      title: 'Chapter 1',
+      title: '第一章',
       content: '',
       lastModified: Date.now()
     };
@@ -188,7 +194,7 @@ const WritingStudioModal: React.FC<WritingStudioModalProps> = ({ activePersona, 
     const count = metadata.chapters.length + 1;
     const newChapter: Chapter = {
       id: newId,
-      title: `Chapter ${count}`,
+      title: `第 ${count} 章`,
       content: '',
       lastModified: Date.now()
     };
@@ -200,12 +206,17 @@ const WritingStudioModal: React.FC<WritingStudioModalProps> = ({ activePersona, 
   };
 
   const handleDeleteChapter = (id: string, e: React.MouseEvent) => {
+    e.preventDefault();
     e.stopPropagation();
-    if (confirm("Delete this chapter permanently?")) {
-       setMetadata(prev => ({
-         ...prev,
-         chapters: prev.chapters.filter(c => c.id !== id)
-       }));
+    
+    if (window.confirm("确定要永久删除此章节吗?")) {
+       setMetadata(prev => {
+         const newChapters = prev.chapters.filter(c => c.id !== id);
+         return {
+           ...prev,
+           chapters: newChapters
+         };
+       });
        if (activeChapterId === id) setActiveChapterId(null);
     }
   };
@@ -251,7 +262,7 @@ const WritingStudioModal: React.FC<WritingStudioModalProps> = ({ activePersona, 
              <div className="flex items-baseline gap-2">
                 <h2 className="font-serif font-bold text-stone-900 truncate text-base">{bookInfo.title}</h2>
              </div>
-             <span className="text-[10px] text-stone-400 font-medium truncate">{wordCount} Words</span>
+             <span className="text-[10px] text-stone-400 font-medium truncate">{wordCount} 字</span>
           </div>
         </div>
 
@@ -265,7 +276,7 @@ const WritingStudioModal: React.FC<WritingStudioModalProps> = ({ activePersona, 
              onClick={handleSaveAll}
              className="px-4 py-1.5 bg-stone-900 text-white rounded-lg font-bold text-xs hover:bg-stone-800 transition-all shadow-lg flex items-center gap-2"
            >
-             Finish
+             完成/保存
            </button>
         </div>
       </header>
@@ -274,8 +285,9 @@ const WritingStudioModal: React.FC<WritingStudioModalProps> = ({ activePersona, 
       <div className="flex-1 flex overflow-hidden">
         
         {/* Sidebar */}
-        <aside className="w-full md:w-80 flex flex-col border-r border-stone-100 bg-stone-50/50 shrink-0 md:relative absolute inset-0 z-30 md:z-auto" style={{ display: (window.innerWidth < 768 && activeChapterId && activeSection === 'chapter') ? 'none' : 'flex' }}>
-          
+        <aside 
+          className={`w-full md:w-80 flex flex-col border-r border-stone-100 bg-stone-50/50 shrink-0 md:relative absolute inset-0 z-30 md:z-auto transition-all ${isEditorActive ? 'hidden md:flex' : 'flex'}`}
+        >
           {/* Tabs */}
           <div className="flex border-b border-stone-100 bg-white">
              <button 
@@ -315,7 +327,7 @@ const WritingStudioModal: React.FC<WritingStudioModalProps> = ({ activePersona, 
 
           <div className="flex-1 overflow-y-auto custom-scrollbar p-0">
              {activeTab === 'directory' && (
-               <div className="pb-16">
+               <div className="pb-4">
                  {metadata.chapters.map((chapter, idx) => (
                     <div 
                       key={chapter.id}
@@ -339,6 +351,7 @@ const WritingStudioModal: React.FC<WritingStudioModalProps> = ({ activePersona, 
                        
                        {isDeleteMode && (
                          <button 
+                           onMouseDown={(e) => e.stopPropagation()}
                            onClick={(e) => handleDeleteChapter(chapter.id, e)}
                            className="w-8 h-8 flex items-center justify-center text-red-500 bg-red-50 rounded-full hover:bg-red-100 transition-colors shrink-0 ml-2"
                          >
@@ -382,10 +395,20 @@ const WritingStudioModal: React.FC<WritingStudioModalProps> = ({ activePersona, 
                </div>
              )}
           </div>
+
+          <div className="p-4 border-t border-stone-100 bg-white md:bg-stone-50/50">
+             <button 
+                onClick={onClose}
+                className="w-full py-3 text-stone-500 hover:text-stone-900 bg-white border border-stone-200 hover:border-stone-300 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2"
+             >
+                <i className="fa-solid fa-house"></i>
+                <span className="font-bold text-xs">返回主页</span>
+             </button>
+          </div>
         </aside>
 
         {/* Editor Area (Hidden on mobile if directory is showing) */}
-        <main className={`flex-1 bg-[#fcfbf9] relative flex flex-col ${(!activeChapterId && activeSection === 'chapter' && window.innerWidth < 768) ? 'hidden' : 'flex'}`}>
+        <main className={`flex-1 bg-[#fcfbf9] relative flex flex-col ${!isEditorActive ? 'hidden md:flex' : 'flex'}`}>
            <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/handmade-paper.png')]"></div>
            
            {/* Section Header */}
@@ -405,14 +428,14 @@ const WritingStudioModal: React.FC<WritingStudioModalProps> = ({ activePersona, 
                      value={metadata.chapters.find(c => c.id === activeChapterId)?.title || ''}
                      onChange={(e) => handleRenameChapter(activeChapterId, e.target.value)}
                      className="bg-transparent font-bold text-stone-900 focus:outline-none focus:border-b border-stone-300 text-base w-full"
-                     placeholder="Chapter Title"
+                     placeholder="章节标题"
                    />
                 ) : (
                    <h3 className="font-bold text-stone-400 text-xs uppercase tracking-widest">
-                     {activeSection === 'mainOutline' && 'Master Outline'}
-                     {activeSection === 'volumeOutline' && 'Volume Breakdown'}
-                     {activeSection === 'inspirations' && 'Spark Log'}
-                     {activeSection === 'characterSettings' && 'Character Database'}
+                     {activeSection === 'mainOutline' && '作品大纲'}
+                     {activeSection === 'volumeOutline' && '分卷大纲'}
+                     {activeSection === 'inspirations' && '灵感记录'}
+                     {activeSection === 'characterSettings' && '角色设定'}
                    </h3>
                 )}
               </div>
@@ -422,7 +445,7 @@ const WritingStudioModal: React.FC<WritingStudioModalProps> = ({ activePersona, 
               <textarea 
                  value={currentContent}
                  onChange={(e) => handleUpdateContent(e.target.value)}
-                 placeholder={activeSection === 'chapter' ? "Start writing your chapter..." : "Draft your ideas here..."}
+                 placeholder={activeSection === 'chapter' ? "开始撰写章节..." : "在此草拟你的想法..."}
                  className="w-full h-full bg-transparent border-none focus:outline-none font-serif text-lg leading-relaxed text-stone-800 placeholder:text-stone-300 resize-none min-h-[60vh]"
               />
            </div>

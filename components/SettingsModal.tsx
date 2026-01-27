@@ -15,9 +15,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ config, onSave, onClose }
     provider: config.provider || 'gemini',
     githubToken: config.githubToken || '',
     backupGistId: config.backupGistId || '',
-    autoMemoryThreshold: config.autoMemoryThreshold || 100 // Default 100
+    autoMemoryThreshold: config.autoMemoryThreshold || 100, // Default 100
+    enableShortTermMemory: config.enableShortTermMemory ?? false, // Default false
+    shortTermMemoryCount: config.shortTermMemoryCount || 5 // Default 5
   });
   
+  // Store the last non-zero threshold to restore it when toggling back on
+  const [lastMemoryThreshold, setLastMemoryThreshold] = useState(config.autoMemoryThreshold > 0 ? config.autoMemoryThreshold : 50);
+
   const [isFetchingModels, setIsFetchingModels] = useState(false);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [statusMsg, setStatusMsg] = useState<{ type: 'info' | 'error' | 'success', text: string } | null>(null);
@@ -44,12 +49,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ config, onSave, onClose }
     const trimmedBaseUrl = formData.baseUrl.trim();
 
     if (!trimmedApiKey || !trimmedBaseUrl) {
-      setStatusMsg({ type: 'error', text: 'Endpoint and API Key are required.' });
+      setStatusMsg({ type: 'error', text: 'Endpoint 和 API Key 必填。' });
       return;
     }
 
     setIsFetchingModels(true);
-    setStatusMsg({ type: 'info', text: 'Connecting to custom endpoint...' });
+    setStatusMsg({ type: 'info', text: '正在连接到接口...' });
     
     try {
       let url = trimmedBaseUrl;
@@ -83,14 +88,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ config, onSave, onClose }
       }
 
       setAvailableModels(models);
-      setStatusMsg({ type: 'success', text: `Found ${models.length} models.` });
+      setStatusMsg({ type: 'success', text: `发现 ${models.length} 个模型。` });
       setFormData(prev => ({ ...prev, apiKey: trimmedApiKey, baseUrl: trimmedBaseUrl }));
       
       if (!models.includes(formData.model) && models.length > 0) {
         setFormData(prev => ({ ...prev, model: models[0] }));
       }
     } catch (err: any) {
-      setStatusMsg({ type: 'error', text: `Connection Failed: ${err.message}` });
+      setStatusMsg({ type: 'error', text: `连接失败: ${err.message}` });
       if (formData.provider === 'gemini') {
         setAvailableModels(['gemini-2.0-flash-exp', 'gemini-1.5-pro', 'gemini-1.5-flash']);
       } else {
@@ -112,7 +117,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ config, onSave, onClose }
         customFontName: fontName,
         customFontData: reader.result as string
       }));
-      setStatusMsg({ type: 'success', text: `Book Font "${fontName}" uploaded.` });
+      setStatusMsg({ type: 'success', text: `书籍字体 "${fontName}" 已上传。` });
     };
     reader.readAsDataURL(file);
   };
@@ -128,7 +133,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ config, onSave, onClose }
         customNoteFontName: fontName,
         customNoteFontData: reader.result as string
       }));
-      setStatusMsg({ type: 'success', text: `Annotation Font "${fontName}" uploaded.` });
+      setStatusMsg({ type: 'success', text: `批注字体 "${fontName}" 已上传。` });
     };
     reader.readAsDataURL(file);
   };
@@ -143,7 +148,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ config, onSave, onClose }
         customBgImage: reader.result as string,
         theme: 'custom'
       }));
-      setStatusMsg({ type: 'success', text: 'Atmosphere image uploaded.' });
+      setStatusMsg({ type: 'success', text: '氛围图片已上传。' });
     };
     reader.readAsDataURL(file);
   };
@@ -157,10 +162,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ config, onSave, onClose }
        try {
          const content = event.target?.result as string;
          await restoreFromJSON(content);
-         setSyncStatus({ type: 'success', text: 'Restore successful! Reloading...' });
+         setSyncStatus({ type: 'success', text: '恢复成功! 刷新中...' });
          setTimeout(() => window.location.reload(), 1500);
        } catch (err) {
-         setSyncStatus({ type: 'error', text: 'Invalid backup file.' });
+         setSyncStatus({ type: 'error', text: '备份文件无效。' });
        }
     };
     reader.readAsText(file);
@@ -168,17 +173,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ config, onSave, onClose }
 
   const handleGitHubUpload = async () => {
     if (!formData.githubToken) {
-      setSyncStatus({ type: 'error', text: 'GitHub Token required.' });
+      setSyncStatus({ type: 'error', text: '需要 GitHub Token。' });
       return;
     }
     setIsSyncing(true);
-    setSyncStatus({ type: 'info', text: 'Uploading to GitHub...' });
+    setSyncStatus({ type: 'info', text: '正在上传到 GitHub...' });
     try {
       const result = await uploadToGitHubGist(formData.githubToken, formData.backupGistId);
       setFormData(prev => ({ ...prev, backupGistId: result.gistId }));
-      setSyncStatus({ type: 'success', text: 'Uploaded successfully!' });
+      setSyncStatus({ type: 'success', text: '上传成功!' });
     } catch (err: any) {
-      setSyncStatus({ type: 'error', text: `Upload failed: ${err.message}` });
+      setSyncStatus({ type: 'error', text: `上传失败: ${err.message}` });
     } finally {
       setIsSyncing(false);
     }
@@ -186,17 +191,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ config, onSave, onClose }
 
   const handleGitHubDownload = async () => {
     if (!formData.githubToken || !formData.backupGistId) {
-       setSyncStatus({ type: 'error', text: 'Token and Gist ID required.' });
+       setSyncStatus({ type: 'error', text: '需要 Token 和 Gist ID。' });
        return;
     }
     setIsSyncing(true);
-    setSyncStatus({ type: 'info', text: 'Downloading from Cloud...' });
+    setSyncStatus({ type: 'info', text: '正在从云端下载...' });
     try {
       await downloadFromGitHubGist(formData.githubToken, formData.backupGistId);
-      setSyncStatus({ type: 'success', text: 'Cloud restore successful! Reloading...' });
+      setSyncStatus({ type: 'success', text: '云端恢复成功! 刷新中...' });
       setTimeout(() => window.location.reload(), 1500);
     } catch (err: any) {
-      setSyncStatus({ type: 'error', text: `Download failed: ${err.message}` });
+      setSyncStatus({ type: 'error', text: `下载失败: ${err.message}` });
     } finally {
        setIsSyncing(false);
     }
@@ -219,8 +224,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ config, onSave, onClose }
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh] overflow-hidden border border-stone-100">
         <div className="p-6 border-b border-stone-100 flex items-center justify-between bg-stone-50/50">
           <div>
-            <h2 className="text-xl font-bold text-stone-900">Engine & Soul Settings</h2>
-            <p className="text-xs text-stone-500 italic">Configure your connection and aesthetics.</p>
+            <h2 className="text-xl font-bold text-stone-900">引擎与灵魂设置</h2>
+            <p className="text-xs text-stone-500 italic">配置 AI 连接与阅读美学。</p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-stone-200 rounded-full text-stone-400">
             <i className="fa-solid fa-xmark"></i>
@@ -233,7 +238,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ config, onSave, onClose }
           <section className="space-y-4">
             <div className="flex items-center gap-2 mb-2">
                <i className="fa-solid fa-plug text-amber-600 text-xs"></i>
-               <label className="text-xs font-semibold text-stone-400 uppercase tracking-wider">AI Provider</label>
+               <label className="text-xs font-semibold text-stone-400 uppercase tracking-wider">AI 服务商</label>
             </div>
             
             <div className="flex p-1 bg-stone-100 rounded-xl mb-4">
@@ -268,7 +273,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ config, onSave, onClose }
                 onClick={handleFetchModels} disabled={isFetchingModels || !formData.apiKey}
                 className="w-full py-3 bg-white border-2 border-dashed border-stone-200 text-stone-500 hover:border-amber-500 hover:text-amber-600 rounded-xl text-xs font-bold"
               >
-                {isFetchingModels ? <i className="fa-solid fa-spinner animate-spin"></i> : 'Connect & Fetch Models'}
+                {isFetchingModels ? <i className="fa-solid fa-spinner animate-spin"></i> : '连接并获取模型'}
               </button>
               {statusMsg && (
                 <div className={`text-[10px] px-4 py-2 rounded-xl border ${statusMsg.type === 'error' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
@@ -282,7 +287,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ config, onSave, onClose }
           <section className="space-y-4">
              <div className="flex items-center gap-2">
                  <i className="fa-solid fa-cloud-arrow-up text-amber-600 text-xs"></i>
-                 <label className="text-xs font-semibold text-stone-400 uppercase tracking-wider">Backup & Cloud Sync</label>
+                 <label className="text-xs font-semibold text-stone-400 uppercase tracking-wider">备份与云同步</label>
             </div>
             
             <div className="p-4 bg-stone-50 rounded-2xl border border-stone-100 space-y-4">
@@ -292,13 +297,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ config, onSave, onClose }
                    onClick={downloadBackupFile}
                    className="py-2 bg-white border border-stone-200 rounded-xl text-[10px] font-bold text-stone-600 hover:bg-amber-50 hover:border-amber-200 hover:text-amber-600 transition-all flex items-center justify-center gap-2"
                  >
-                   <i className="fa-solid fa-file-export"></i> Export JSON
+                   <i className="fa-solid fa-file-export"></i> 导出备份
                  </button>
                  <button 
                    onClick={() => backupInputRef.current?.click()}
                    className="py-2 bg-white border border-stone-200 rounded-xl text-[10px] font-bold text-stone-600 hover:bg-amber-50 hover:border-amber-200 hover:text-amber-600 transition-all flex items-center justify-center gap-2"
                  >
-                   <i className="fa-solid fa-file-import"></i> Import JSON
+                   <i className="fa-solid fa-file-import"></i> 导入备份
                  </button>
                  <input type="file" ref={backupInputRef} onChange={handleLocalRestore} accept=".json" className="hidden" />
               </div>
@@ -307,7 +312,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ config, onSave, onClose }
               <div className="pt-2 border-t border-stone-200/50 space-y-3">
                 <div className="flex items-center justify-between text-[10px] font-bold text-stone-400 uppercase">
                   <span>GitHub Cloud (Gist)</span>
-                  <a href="https://github.com/settings/tokens" target="_blank" rel="noreferrer" className="text-amber-600 hover:underline">Get Token</a>
+                  <a href="https://github.com/settings/tokens" target="_blank" rel="noreferrer" className="text-amber-600 hover:underline">获取 Token</a>
                 </div>
                 <input 
                   type="password" 
@@ -320,7 +325,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ config, onSave, onClose }
                    type="text" 
                    value={formData.backupGistId}
                    onChange={(e) => setFormData({...formData, backupGistId: e.target.value})}
-                   placeholder="Gist ID (Auto-filled after upload)"
+                   placeholder="Gist ID (上传后自动填充)"
                    className="w-full bg-white border border-stone-200 rounded-xl py-2 px-3 text-[10px] font-mono text-stone-500"
                  />
                  <div className="grid grid-cols-2 gap-3">
@@ -330,7 +335,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ config, onSave, onClose }
                      className="py-2 bg-stone-800 text-white rounded-xl text-[10px] font-bold hover:bg-stone-900 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                    >
                      {isSyncing ? <i className="fa-solid fa-spinner animate-spin"></i> : <i className="fa-solid fa-cloud-arrow-up"></i>}
-                     Upload to Cloud
+                     上传云端
                    </button>
                    <button 
                      onClick={handleGitHubDownload}
@@ -338,7 +343,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ config, onSave, onClose }
                      className="py-2 bg-white border border-stone-200 text-stone-600 rounded-xl text-[10px] font-bold hover:bg-stone-50 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                    >
                      {isSyncing ? <i className="fa-solid fa-spinner animate-spin"></i> : <i className="fa-solid fa-cloud-arrow-down"></i>}
-                     Download
+                     云端下载
                    </button>
                  </div>
                  {syncStatus && (
@@ -354,44 +359,96 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ config, onSave, onClose }
           <section className="space-y-4">
             <div className="flex items-center gap-2">
                  <i className="fa-solid fa-brain text-amber-600 text-xs"></i>
-                 <label className="text-xs font-semibold text-stone-400 uppercase tracking-wider">Soul Behavior</label>
+                 <label className="text-xs font-semibold text-stone-400 uppercase tracking-wider">灵魂行为</label>
             </div>
             <div className="p-4 bg-stone-50 rounded-2xl space-y-5 border border-stone-100">
               
-              {/* Memory Config (NEW) */}
+              {/* Memory Config (Long Term) */}
               <div className="space-y-3 pb-3 border-b border-stone-200/50">
                  <div className="flex items-center justify-between">
                    <div>
-                     <div className="text-sm font-bold text-stone-800">Auto-Memory (长期记忆)</div>
-                     <div className="text-[10px] text-stone-500">Auto-summarize annotations into memory</div>
+                     <div className="text-sm font-bold text-stone-800">自动记忆 (Long-Term)</div>
+                     <div className="text-[10px] text-stone-500">将批注定期总结为长期记忆</div>
                    </div>
-                   <div className="text-amber-600 font-bold text-xs bg-amber-50 px-2 py-1 rounded">
-                      {formData.autoMemoryThreshold > 0 ? `Every ${formData.autoMemoryThreshold}` : 'Disabled'}
-                   </div>
+                   <button 
+                      onClick={() => {
+                        const isEnabled = formData.autoMemoryThreshold > 0;
+                        if (isEnabled) {
+                           setLastMemoryThreshold(formData.autoMemoryThreshold);
+                           setFormData({ ...formData, autoMemoryThreshold: 0 });
+                        } else {
+                           setFormData({ 
+                             ...formData, 
+                             autoMemoryThreshold: lastMemoryThreshold > 0 ? lastMemoryThreshold : 50 
+                           });
+                        }
+                      }}
+                      className={`w-10 h-6 rounded-full transition-colors relative ${formData.autoMemoryThreshold > 0 ? 'bg-amber-500' : 'bg-stone-300'}`}
+                    >
+                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${formData.autoMemoryThreshold > 0 ? 'left-5' : 'left-1'}`} />
+                    </button>
                  </div>
-                 <div className="space-y-2">
-                   <div className="flex justify-between text-[10px] text-stone-400 uppercase">
-                     <span>Annotations Threshold</span>
-                     <span>{formData.autoMemoryThreshold}</span>
+                 
+                 {formData.autoMemoryThreshold > 0 && (
+                   <div className="pt-2 animate-fadeIn space-y-2">
+                     <div className="flex justify-between text-[10px] text-stone-400 uppercase">
+                       <span>触发阈值</span>
+                       <span className="text-amber-600 font-bold">每 {formData.autoMemoryThreshold} 条批注</span>
+                     </div>
+                     <input 
+                        type="range" min="10" max="200" step="10"
+                        value={formData.autoMemoryThreshold}
+                        onChange={(e) => {
+                           const val = parseInt(e.target.value);
+                           setFormData({...formData, autoMemoryThreshold: val});
+                           setLastMemoryThreshold(val);
+                        }}
+                        className="w-full accent-amber-500 h-1.5 bg-stone-200 rounded-lg appearance-none cursor-pointer"
+                     />
                    </div>
-                   <input 
-                      type="range" min="0" max="200" step="10"
-                      value={formData.autoMemoryThreshold}
-                      onChange={(e) => setFormData({...formData, autoMemoryThreshold: parseInt(e.target.value)})}
-                      className="w-full accent-amber-500 h-1.5 bg-stone-200 rounded-lg appearance-none cursor-pointer"
-                   />
-                   <div className="flex justify-between text-[9px] text-stone-300">
-                      <span>Off (0)</span>
-                      <span>200</span>
+                 )}
+              </div>
+
+              {/* Short-Term Memory Config (NEW) */}
+              <div className="space-y-3 pb-3 border-b border-stone-200/50">
+                 <div className="flex items-center justify-between">
+                   <div>
+                     <div className="text-sm font-bold text-stone-800">短期记忆 (Short-Term)</div>
+                     <div className="text-[10px] text-stone-500">在回复时快速回溯最近的对话流</div>
                    </div>
+                   <button 
+                      onClick={() => setFormData({...formData, enableShortTermMemory: !formData.enableShortTermMemory})}
+                      className={`w-10 h-6 rounded-full transition-colors relative ${formData.enableShortTermMemory ? 'bg-amber-500' : 'bg-stone-300'}`}
+                    >
+                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${formData.enableShortTermMemory ? 'left-5' : 'left-1'}`} />
+                    </button>
                  </div>
+                 
+                 {formData.enableShortTermMemory && (
+                   <div className="pt-2 animate-fadeIn space-y-2">
+                     <div className="flex justify-between text-[10px] text-stone-400 uppercase">
+                       <span>回溯条数</span>
+                       <span className="text-amber-600 font-bold">最近 {formData.shortTermMemoryCount || 5} 条</span>
+                     </div>
+                     <input 
+                        type="range" min="5" max="20" step="1"
+                        value={formData.shortTermMemoryCount || 5}
+                        onChange={(e) => setFormData({...formData, shortTermMemoryCount: parseInt(e.target.value)})}
+                        className="w-full accent-amber-500 h-1.5 bg-stone-200 rounded-lg appearance-none cursor-pointer"
+                     />
+                     <div className="flex justify-between text-[9px] text-stone-300">
+                        <span>5条</span>
+                        <span>20条</span>
+                     </div>
+                   </div>
+                 )}
               </div>
 
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-sm font-bold text-stone-800">Autonomous Reading</div>
-                    <div className="text-[10px] text-stone-500">Allow partner to read spontaneously</div>
+                    <div className="text-sm font-bold text-stone-800">自主阅读</div>
+                    <div className="text-[10px] text-stone-500">允许伙伴自主发现并批注</div>
                   </div>
                   <button 
                     onClick={() => setFormData({...formData, autonomousReading: !formData.autonomousReading})}
@@ -403,7 +460,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ config, onSave, onClose }
                 {formData.autonomousReading && (
                   <div className="pt-2 border-t border-stone-200/50 animate-fadeIn">
                      <div className="flex justify-between text-[10px] font-bold text-stone-400 uppercase mb-2">
-                       <span>Annotations per Page</span>
+                       <span>每页批注上限</span>
                        <span className="text-amber-600">{formData.autoAnnotationCount || 2}</span>
                      </div>
                      <input 
@@ -420,7 +477,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ config, onSave, onClose }
 
           {/* Model Selection */}
           <section className="space-y-4">
-            <div className="text-xs font-semibold text-stone-400 uppercase tracking-wider">Model Selection</div>
+            <div className="text-xs font-semibold text-stone-400 uppercase tracking-wider">模型选择</div>
             {availableModels.length > 0 ? (
                <div className="grid grid-cols-2 gap-2">
                  {availableModels.map(m => (
@@ -434,7 +491,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ config, onSave, onClose }
                </div>
             ) : (
               <div className="text-[10px] text-stone-400 italic">
-                {formData.model ? `Current: ${formData.model}` : "Fetch models to see options..."}
+                {formData.model ? `当前: ${formData.model}` : "获取模型后查看选项..."}
               </div>
             )}
           </section>
@@ -443,7 +500,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ config, onSave, onClose }
           <section className="space-y-4">
             <div className="flex items-center gap-2">
                  <i className="fa-solid fa-wand-magic-sparkles text-amber-600 text-xs"></i>
-                 <label className="text-xs font-semibold text-stone-400 uppercase tracking-wider">Atmosphere & Typography</label>
+                 <label className="text-xs font-semibold text-stone-400 uppercase tracking-wider">氛围与字体</label>
             </div>
             
             <div className="space-y-2">
@@ -490,12 +547,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ config, onSave, onClose }
         </div>
 
         <div className="p-6 bg-stone-50 border-t border-stone-100 flex gap-4">
-          <button onClick={onClose} className="flex-1 py-3 text-stone-500 font-bold text-xs">Cancel</button>
+          <button onClick={onClose} className="flex-1 py-3 text-stone-500 font-bold text-xs">取消</button>
           <button 
             onClick={handleSave}
             className="flex-[2] py-3 bg-stone-900 text-white rounded-2xl font-bold text-xs shadow-xl"
           >
-            Save & Sync Engine
+            保存设置
           </button>
         </div>
       </div>

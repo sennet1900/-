@@ -18,7 +18,7 @@ const AnnotationActionModal: React.FC<AnnotationActionModalProps> = ({ selection
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-stone-100">
         <div className="p-6 border-b border-stone-100 bg-stone-50/50">
           <div className="flex justify-between items-start mb-2">
-            <h3 className="font-bold text-stone-900">Add Marginalia</h3>
+            <h3 className="font-bold text-stone-900">添加页边批注</h3>
             <button onClick={onClose} className="text-stone-400 hover:text-stone-600"><i className="fa-solid fa-xmark"></i></button>
           </div>
           <p className="text-xs text-stone-500 italic line-clamp-2">"{selection}"</p>
@@ -35,8 +35,8 @@ const AnnotationActionModal: React.FC<AnnotationActionModalProps> = ({ selection
                   <i className="fa-solid fa-pen-nib"></i>
                 </div>
                 <div>
-                  <div className="font-bold text-sm text-stone-900">Write your own note</div>
-                  <div className="text-[10px] text-stone-500">Share your thoughts first.</div>
+                  <div className="font-bold text-sm text-stone-900">写下你的想法</div>
+                  <div className="text-[10px] text-stone-500">先分享你的见解。</div>
                 </div>
               </button>
 
@@ -48,8 +48,8 @@ const AnnotationActionModal: React.FC<AnnotationActionModalProps> = ({ selection
                   <i className="fa-solid fa-sparkles"></i>
                 </div>
                 <div>
-                  <div className="font-bold text-sm text-stone-900">Ask AI to annotate</div>
-                  <div className="text-[10px] text-stone-500">Get an immediate insight from your partner.</div>
+                  <div className="font-bold text-sm text-stone-900">邀请 AI 批注</div>
+                  <div className="text-[10px] text-stone-500">获得即时的共读反馈。</div>
                 </div>
               </button>
             </div>
@@ -59,7 +59,7 @@ const AnnotationActionModal: React.FC<AnnotationActionModalProps> = ({ selection
                 autoFocus
                 value={note}
                 onChange={e => setNote(e.target.value)}
-                placeholder="What are your thoughts on this passage?"
+                placeholder="你对这段话有什么看法？"
                 className="w-full bg-stone-50 border border-stone-200 rounded-2xl p-4 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 min-h-[120px] resize-none"
               />
               <div className="flex gap-2">
@@ -68,7 +68,7 @@ const AnnotationActionModal: React.FC<AnnotationActionModalProps> = ({ selection
                     onClick={() => setMode('choice')}
                     className="flex-1 py-2 text-stone-500 hover:bg-stone-100 rounded-xl text-xs font-bold transition-colors"
                   >
-                    Back
+                    返回
                   </button>
                 )}
                 <button 
@@ -76,7 +76,7 @@ const AnnotationActionModal: React.FC<AnnotationActionModalProps> = ({ selection
                   onClick={() => onUserAnnotate(note)}
                   className="flex-[2] py-2 bg-stone-900 text-white rounded-xl text-xs font-bold hover:bg-stone-800 transition-colors disabled:opacity-50"
                 >
-                  Save & Ask AI
+                  保存笔记
                 </button>
               </div>
             </div>

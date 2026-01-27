@@ -6,20 +6,30 @@ interface BackupData {
   timestamp: number;
   library: Book[];
   annotations: Annotation[];
-  customPersonas: Persona[];
+  activePersonas: Persona[]; // Changed from customPersonas to capture ALL personas including evolved memories
   engineConfig: Partial<EngineConfig>;
 }
 
-const BACKUP_VERSION = 1;
+const BACKUP_VERSION = 2; // Incremented version
 const GIST_FILENAME = "soulreader_backup.json";
-const GIST_DESCRIPTION = "SoulReader App Data Backup";
+const GIST_DESCRIPTION = "SoulReader App Data Backup (Full)";
 
 // --- Local Backup Utilities ---
 
 export const createBackupData = (): BackupData => {
+  // 1. Library: Includes imported books AND Writing Studio creations (with writingMetadata)
   const library = JSON.parse(localStorage.getItem('sr_library') || '[]');
+  
+  // 2. Annotations: Includes user notes, AI replies, and chat history
   const annotations = JSON.parse(localStorage.getItem('sr_annotations') || '[]');
-  const customPersonas = JSON.parse(localStorage.getItem('sr_custom_personas') || '[]');
+  
+  // 3. Personas: Use 'sr_active_personas' to capture current state of ALL personas
+  // This ensures we save 'longTermMemory', avatar changes, and system instruction tweaks for default roles too.
+  const activePersonas = JSON.parse(localStorage.getItem('sr_active_personas') || '[]');
+  
+  // Fallback: If active_personas is empty (fresh load), try custom + default manually (rare edge case)
+  const finalPersonas = activePersonas.length > 0 ? activePersonas : JSON.parse(localStorage.getItem('sr_custom_personas') || '[]');
+
   const engineConfig = JSON.parse(localStorage.getItem('sr_engine_config') || '{}');
 
   return {
@@ -27,7 +37,7 @@ export const createBackupData = (): BackupData => {
     timestamp: Date.now(),
     library,
     annotations,
-    customPersonas,
+    activePersonas: finalPersonas,
     engineConfig
   };
 };
@@ -40,7 +50,9 @@ export const downloadBackupFile = () => {
   
   const link = document.createElement('a');
   link.href = url;
-  link.download = `soulreader_backup_${new Date().toISOString().slice(0, 10)}.json`;
+  // Add timestamp to filename
+  const dateStr = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+  link.download = `soulreader_full_backup_${dateStr}.json`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -49,18 +61,36 @@ export const downloadBackupFile = () => {
 
 export const restoreFromJSON = async (jsonString: string): Promise<boolean> => {
   try {
-    const data: BackupData = JSON.parse(jsonString);
+    const data: any = JSON.parse(jsonString);
     
     // Basic Validation
-    if (!data.library || !Array.isArray(data.library)) throw new Error("Invalid Library Data");
-    if (!data.annotations || !Array.isArray(data.annotations)) throw new Error("Invalid Annotations Data");
+    if (!data.library || !Array.isArray(data.library)) throw new Error("无效的书籍数据 (Invalid Library Data)");
+    if (!data.annotations || !Array.isArray(data.annotations)) throw new Error("无效的批注数据 (Invalid Annotations Data)");
 
-    // Restore to LocalStorage
+    // --- Restore Library (Books & Writing Studio) ---
+    // Writing Studio data is nested in book.writingMetadata. JSON.parse preserves this automatically.
     localStorage.setItem('sr_library', JSON.stringify(data.library));
+
+    // --- Restore Annotations ---
     localStorage.setItem('sr_annotations', JSON.stringify(data.annotations));
-    localStorage.setItem('sr_custom_personas', JSON.stringify(data.customPersonas || []));
+
+    // --- Restore Personas ---
+    // Handle migration from V1 backups (which used 'customPersonas') to V2 (which uses 'activePersonas')
+    let personasToRestore = [];
+    if (data.activePersonas && Array.isArray(data.activePersonas)) {
+        personasToRestore = data.activePersonas;
+    } else if (data.customPersonas && Array.isArray(data.customPersonas)) {
+        // If restoring an old backup, we put custom personas into the active slot.
+        // Note: This might lose "default assistant" memory if the old backup didn't include it, 
+        // but App.tsx will merge defaults back in if missing.
+        personasToRestore = data.customPersonas;
+    }
     
-    // Merge config but keep existing sensitive keys if new one is empty (optional safety)
+    if (personasToRestore.length > 0) {
+        localStorage.setItem('sr_active_personas', JSON.stringify(personasToRestore));
+    }
+
+    // --- Restore Config ---
     const currentConfig = JSON.parse(localStorage.getItem('sr_engine_config') || '{}');
     const newConfig = { ...currentConfig, ...data.engineConfig };
     localStorage.setItem('sr_engine_config', JSON.stringify(newConfig));

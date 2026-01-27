@@ -3,8 +3,21 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    
+    <!-- PWA / Mobile Standalone Configuration -->
     <title>SoulReader - AI Collaborative Reading</title>
+    <link rel="manifest" href="/manifest.json">
+    
+    <!-- iOS support -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="SoulReader">
+    <link rel="apple-touch-icon" href="https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/1f4d6.png">
+    
+    <!-- Theme Color -->
+    <meta name="theme-color" content="#fafaf9">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -16,6 +29,9 @@
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         .glass { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(8px); }
+        
+        /* Disable text selection on UI elements to feel more like an app */
+        button, .select-none { user-select: none; -webkit-user-select: none; }
     </style>
 <script type="importmap">
 {
@@ -24,12 +40,14 @@
     "react/": "https://esm.sh/react@^19.2.3/",
     "react": "https://esm.sh/react@^19.2.3",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "pdfjs-dist": "https://esm.sh/pdfjs-dist@4.0.379"
+    "pdfjs-dist": "https://esm.sh/pdfjs-dist@4.0.379",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
+    "vite": "https://esm.sh/vite@^7.3.1"
   }
 }
 </script>
 </head>
-<body class="bg-stone-50 text-stone-900">
+<body class="bg-stone-50 text-stone-900 overscroll-none">
     <div id="root"></div>
 </body>
 </html>

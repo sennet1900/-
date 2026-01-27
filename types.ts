@@ -7,6 +7,8 @@ export interface Persona {
   description: string;
   avatar: string;
   systemInstruction: string;
+  userIdentity?: string; // NEW: Who the user is acting as
+  userAvatar?: string;   // NEW: The user's avatar for this specific relationship
   longTermMemory?: string; // NEW: Stores consolidated memories
 }
 
@@ -24,6 +26,8 @@ export interface EngineConfig {
 
   // Memory Settings (NEW)
   autoMemoryThreshold: number; // 0 to disable, or N (e.g. 50, 100)
+  enableShortTermMemory: boolean; // Toggle for STM
+  shortTermMemoryCount: number;   // Number of recent items (5-20)
 
   // Font Settings
   aiFont: string;          
@@ -88,6 +92,8 @@ export interface Book {
   coverColor: string;
   addedAt: number;
   timeSpent: number; 
+  lastReadPage?: number; // Persist reading progress
+  lastPersonaId?: string; // NEW: Tracks the last used persona for this specific book
   rating?: number;   
   userReview?: string;
   aiReview?: string;

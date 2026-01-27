@@ -8,11 +8,16 @@ interface ToastProps {
   duration?: number;
 }
 
-const Toast: React.FC<ToastProps> = ({ message, type = 'info', onClose, duration = 3000 }) => {
+const Toast: React.FC<ToastProps> = ({ message, type = 'info', onClose, duration }) => {
+  // Logic: If duration is not manually provided:
+  // Errors stay for 6 seconds (6000ms)
+  // Normal messages (info/success) stay for 1.5 seconds (1500ms)
+  const autoDuration = duration || (type === 'error' ? 6000 : 1500);
+
   useEffect(() => {
-    const timer = setTimeout(onClose, duration);
+    const timer = setTimeout(onClose, autoDuration);
     return () => clearTimeout(timer);
-  }, [duration, onClose]);
+  }, [autoDuration, onClose]);
 
   const bgColors = {
     info: 'bg-stone-800',
@@ -27,7 +32,11 @@ const Toast: React.FC<ToastProps> = ({ message, type = 'info', onClose, duration
   };
 
   return (
-    <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[200] flex items-center gap-3 px-6 py-3 rounded-full shadow-2xl text-white animate-slideDown ${bgColors[type]}`}>
+    <div 
+      onClick={onClose}
+      className={`fixed top-6 left-1/2 -translate-x-1/2 z-[200] flex items-center gap-3 px-6 py-3 rounded-full shadow-2xl text-white animate-slideDown cursor-pointer hover:scale-105 transition-transform ${bgColors[type]}`}
+      title="点击关闭"
+    >
       <i className={`fa-solid ${icons[type]}`}></i>
       <span className="text-sm font-bold">{message}</span>
     </div>

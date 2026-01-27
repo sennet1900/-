@@ -9,7 +9,7 @@ interface BookEditModalProps {
   onClose: () => void;
 }
 
-const PRESET_CATEGORIES = ['Philosophy', 'Fiction', 'Science', 'History', 'Technology', 'Poetry', 'Drama'];
+const PRESET_CATEGORIES = ['哲学', '小说', '科学', '历史', '科技', '诗歌', '戏剧'];
 
 const BookEditModal: React.FC<BookEditModalProps> = ({ book, onSave, onDelete, onClose }) => {
   const [formData, setFormData] = useState<Book>({ ...book });
@@ -26,8 +26,8 @@ const BookEditModal: React.FC<BookEditModalProps> = ({ book, onSave, onDelete, o
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh] overflow-hidden border border-stone-100">
         <div className="p-6 border-b border-stone-100 flex items-center justify-between bg-stone-50/50">
           <div>
-            <h2 className="text-xl font-bold text-stone-900">Book Details</h2>
-            <p className="text-xs text-stone-500">Organize your personal library.</p>
+            <h2 className="text-xl font-bold text-stone-900">书籍详情</h2>
+            <p className="text-xs text-stone-500">整理你的个人书房。</p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-stone-200 rounded-full text-stone-400 transition-colors">
             <i className="fa-solid fa-xmark"></i>
@@ -36,30 +36,30 @@ const BookEditModal: React.FC<BookEditModalProps> = ({ book, onSave, onDelete, o
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6 overflow-y-auto">
           <div className="space-y-2">
-            <label className="text-xs font-semibold text-stone-400 uppercase tracking-wider">Book Title</label>
+            <label className="text-xs font-semibold text-stone-400 uppercase tracking-wider">书名</label>
             <input 
               type="text" 
               required
               value={formData.title}
               onChange={e => setFormData({...formData, title: e.target.value})}
               className="w-full bg-stone-50 border border-stone-200 rounded-xl py-3 px-4 focus:ring-2 focus:ring-amber-500/20 focus:outline-none focus:border-amber-500"
-              placeholder="e.g. The Republic"
+              placeholder="例如: 理想国"
             />
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-semibold text-stone-400 uppercase tracking-wider">Author</label>
+            <label className="text-xs font-semibold text-stone-400 uppercase tracking-wider">作者</label>
             <input 
               type="text" 
               value={formData.author || ''}
               onChange={e => setFormData({...formData, author: e.target.value})}
               className="w-full bg-stone-50 border border-stone-200 rounded-xl py-3 px-4 focus:ring-2 focus:ring-amber-500/20 focus:outline-none focus:border-amber-500"
-              placeholder="e.g. Plato"
+              placeholder="例如: 柏拉图"
             />
           </div>
 
           <div className="space-y-4">
-            <label className="text-xs font-semibold text-stone-400 uppercase tracking-wider">Category</label>
+            <label className="text-xs font-semibold text-stone-400 uppercase tracking-wider">分类</label>
             <div className="flex flex-wrap gap-2">
               {PRESET_CATEGORIES.map(cat => (
                 <button
@@ -80,13 +80,13 @@ const BookEditModal: React.FC<BookEditModalProps> = ({ book, onSave, onDelete, o
               type="text" 
               value={formData.category}
               onChange={e => setFormData({...formData, category: e.target.value})}
-              placeholder="Or enter custom category..."
+              placeholder="或输入自定义分类..."
               className="w-full bg-stone-50 border border-stone-200 rounded-xl py-3 px-4 focus:ring-2 focus:ring-amber-500/20 focus:outline-none focus:border-amber-500"
             />
           </div>
 
           <div className="space-y-2">
-             <label className="text-xs font-semibold text-stone-400 uppercase tracking-wider">Theme Color</label>
+             <label className="text-xs font-semibold text-stone-400 uppercase tracking-wider">封面色调</label>
              <div className="flex gap-3">
                {['#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ef4444', '#ec4899', '#78350f'].map(color => (
                  <button
@@ -107,7 +107,7 @@ const BookEditModal: React.FC<BookEditModalProps> = ({ book, onSave, onDelete, o
             onClick={() => onDelete(book.id)}
             className="px-4 py-2 text-red-500 hover:bg-red-50 rounded-xl transition-colors text-sm font-medium"
           >
-            Remove from Library
+            移出书房
           </button>
           <div className="flex-1" />
           <button 
@@ -115,13 +115,13 @@ const BookEditModal: React.FC<BookEditModalProps> = ({ book, onSave, onDelete, o
             onClick={onClose}
             className="px-6 py-2 text-stone-500 hover:bg-stone-200 rounded-xl transition-colors text-sm font-medium"
           >
-            Cancel
+            取消
           </button>
           <button 
             onClick={handleSubmit}
             className="px-6 py-2 bg-stone-900 text-white rounded-xl hover:bg-stone-800 transition-colors shadow-lg text-sm font-medium"
           >
-            Save Changes
+            保存更改
           </button>
         </div>
       </div>

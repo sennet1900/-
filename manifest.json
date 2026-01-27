@@ -1,0 +1,23 @@
+
+{
+  "name": "SoulReader",
+  "short_name": "SoulReader",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#fafaf9",
+  "theme_color": "#fafaf9",
+  "description": "An AI-powered collaborative reading companion.",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/1f4d6.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/1f4d6.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
