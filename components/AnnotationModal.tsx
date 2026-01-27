@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { Annotation, Persona, EngineConfig } from '../types';
 
 interface AnnotationActionModalProps {
@@ -39,11 +39,62 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
 }) => {
   const [messages, setMessages] = useState<{role: string, text: string}[]>([]);
   const [input, setInput] = useState('');
-  const [isTextExpanded, setIsTextExpanded] = useState(false);
+  
+  // Visual Viewport State
+  const [viewportHeight, setViewportHeight] = useState(window.innerHeight);
+  const [viewportTop, setViewportTop] = useState(0);
+
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const annotationFont = engineConfig.customNoteFontName || engineConfig.aiFont;
 
+  // --- 1. CORE LAYOUT ENGINE (Visual Viewport API) ---
+  useEffect(() => {
+    // Handler to force the container to match the ACTUAL visible screen size (excluding keyboard)
+    const handleResize = () => {
+      if (window.visualViewport) {
+        setViewportHeight(window.visualViewport.height);
+        setViewportTop(window.visualViewport.offsetTop);
+        
+        // When keyboard opens/resizes, scroll to bottom to keep input visible
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+      } else {
+        // Fallback for very old browsers
+        setViewportHeight(window.innerHeight);
+      }
+    };
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleResize);
+      window.visualViewport.addEventListener('scroll', handleResize);
+      handleResize(); // Init
+    } else {
+      window.addEventListener('resize', handleResize);
+    }
+
+    // Lock Body Scroll
+    document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.width = '100%';
+
+    return () => {
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', handleResize);
+        window.visualViewport.removeEventListener('scroll', handleResize);
+      } else {
+        window.removeEventListener('resize', handleResize);
+      }
+      // Unlock Body Scroll
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.width = '';
+    };
+  }, []);
+
+  // --- 2. DATA SYNC ---
   useEffect(() => {
     if (annotation.chatHistory) {
       setMessages(annotation.chatHistory);
@@ -56,35 +107,13 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
     }
   }, [annotation.chatHistory, annotation.comment, annotation.author]);
 
-  // --- SCROLL TO BOTTOM ---
-  useEffect(() => {
+  // --- 3. AUTO SCROLL ---
+  useLayoutEffect(() => {
     if (scrollRef.current) {
-       // Timeout ensures layout has repainted after keyboard opens or content adds
-       setTimeout(() => {
-          if (scrollRef.current) {
-             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-          }
-       }, 100); 
+       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, isProcessing]);
+  }, [messages, isProcessing, viewportHeight]); // Trigger on height change too
 
-  // --- BODY SCROLL LOCK ---
-  useEffect(() => {
-    const scrollY = window.scrollY;
-    document.body.style.position = 'fixed';
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = '100%';
-    document.body.style.overflow = 'hidden';
-
-    return () => {
-      document.body.style.position = '';
-      document.body.style.top = '';
-      document.body.style.width = '';
-      document.body.style.overflow = '';
-      window.scrollTo(0, scrollY);
-    };
-  }, []);
-  
   const handleSend = async (triggerAI: boolean) => {
     if (isProcessing) return;
     if (!input.trim() && !triggerAI) return;
@@ -93,8 +122,10 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
     if (input.trim()) {
       const userMsg = input;
       setInput('');
-      const textarea = document.getElementById('chat-input-textarea');
-      if (textarea) textarea.style.height = 'auto';
+      // Reset height
+      if (inputRef.current) {
+        inputRef.current.style.height = 'auto';
+      }
 
       nextHistory = [...messages, { role: 'user', text: userMsg }];
       setMessages(nextHistory);
@@ -109,8 +140,7 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
     if (triggerAI) {
         onTriggerAI(input.trim() ? input : "", messages);
         setInput('');
-        const textarea = document.getElementById('chat-input-textarea');
-        if (textarea) textarea.style.height = 'auto';
+        if (inputRef.current) inputRef.current.style.height = 'auto';
     }
   };
 
@@ -126,169 +156,151 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
   const canRecordOnly = !isProcessing && input.trim().length > 0;
 
   return (
-    // WRAPPER:
-    // Mobile: fixed inset-0 (Full Screen). flex-col ensures child fills height.
-    // Desktop: centered modal layout.
-    <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center sm:bg-stone-900/60 sm:backdrop-blur-md">
-      
-      {/* Desktop Backdrop */}
-      <div className="absolute inset-0 hidden sm:block" onClick={onClose} />
+    <div 
+      className="fixed inset-0 z-[100] bg-stone-900/50 sm:backdrop-blur-sm sm:flex sm:items-center sm:justify-center"
+      style={{
+         // On Mobile: these are ignored because the inner container is fixed
+         // On Desktop: this creates the overlay
+      }}
+    >
+      {/* Desktop Click-to-close overlay */}
+      <div className="hidden sm:block absolute inset-0" onClick={onClose}></div>
 
-      {/* CONTENT CONTAINER */}
-      {/* Mobile: w-full h-full (Strictly fills the fixed inset-0 wrapper, which resizes with keyboard) */}
-      {/* Desktop: Fixed size card */}
+      {/* 
+         THE MAIN CONTAINER 
+         Mobile: Strictly controlled by JS height/top to match VisualViewport.
+         Desktop: Standard centered modal.
+      */}
       <div 
-        className="relative w-full h-full sm:h-[85vh] sm:max-w-lg bg-[#f2f2f2] sm:bg-white sm:rounded-2xl sm:shadow-2xl flex flex-col overflow-hidden animate-fadeIn"
+        className="fixed sm:relative bg-[#ededed] w-full sm:w-[450px] sm:h-[800px] sm:max-h-[85vh] sm:rounded-2xl sm:shadow-2xl flex flex-col overflow-hidden"
+        style={{
+          // MOBILE ONLY STYLES (overridden by sm: styles above)
+          height: window.innerWidth < 640 ? `${viewportHeight}px` : undefined,
+          top: window.innerWidth < 640 ? `${viewportTop}px` : undefined,
+          left: 0,
+        }}
       >
         
-        {/* === 1. HEADER (Fixed Top) === */}
-        <div className="shrink-0 bg-white border-b border-stone-200 px-4 py-2 flex items-center justify-between shadow-sm z-20 safe-area-top">
-          <button 
-            onClick={onClose}
-            className="w-10 h-10 -ml-2 flex items-center justify-center rounded-full text-stone-500 hover:bg-stone-100 active:scale-95 transition-all"
-          >
-             <i className="fa-solid fa-chevron-down sm:hidden text-lg"></i>
-             <i className="fa-solid fa-xmark hidden sm:block text-lg"></i>
-          </button>
-
-          <div className="flex flex-col items-center">
-            <div className="flex items-center gap-1.5">
-               <span className="text-sm font-bold text-stone-900">{persona.name}</span>
-               {isOriginal && <i className="fa-solid fa-heart text-amber-500 text-[10px]"></i>}
-            </div>
-            <span className="text-[10px] text-stone-400 font-medium">{persona.role}</span>
-          </div>
-
-          <div className="w-10 flex justify-end">
-            <Avatar avatar={persona.userAvatar || '👤'} className="w-9 h-9 border border-stone-100" />
-          </div>
+        {/* === HEADER (Fixed Height 56px) === */}
+        <div className="h-14 shrink-0 bg-[#ededed] border-b border-stone-200/50 flex items-center justify-between px-4 relative z-20 shadow-sm">
+           <button onClick={onClose} className="w-10 h-10 flex items-center justify-center -ml-2 text-stone-600">
+             <i className="fa-solid fa-chevron-down text-lg"></i>
+           </button>
+           <div className="font-bold text-stone-900">{persona.name}</div>
+           <button className="w-10 h-10 flex items-center justify-center text-stone-600">
+             <i className="fa-solid fa-ellipsis"></i>
+           </button>
         </div>
 
-        {/* === 2. QUOTE (Fixed below Header) === */}
-        <div 
-           className="shrink-0 bg-white border-b border-stone-200 z-10"
-           onClick={() => setIsTextExpanded(!isTextExpanded)}
-        >
-          <div className="px-4 py-3 flex gap-3 items-start cursor-pointer hover:bg-stone-50 transition-colors">
-             <div className="w-1 self-stretch bg-amber-400 rounded-full shrink-0 my-1"></div>
-             <div className={`flex-1 text-stone-600 text-sm leading-relaxed italic ${isTextExpanded ? '' : 'line-clamp-2'}`}>
-                "{annotation.textSelection}"
-             </div>
-             <i className={`fa-solid fa-caret-down text-stone-300 text-xs mt-1 transition-transform ${isTextExpanded ? 'rotate-180' : ''}`}></i>
-          </div>
-        </div>
-
-        {/* === 3. CHAT AREA (Flexible Middle) === */}
-        {/* flex-1: Takes all available space between Quote and Input */}
-        {/* min-h-0: Prevents flex child from overflowing parent, enables scrolling */}
+        {/* === SCROLL AREA (Flex Grow) === */}
         <div 
           ref={scrollRef}
-          className="flex-1 overflow-y-auto p-4 space-y-6 bg-[#f2f2f2] sm:bg-[#f5f5f5] min-h-0"
-          style={{ WebkitOverflowScrolling: 'touch' }} 
+          className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4"
+          style={{ WebkitOverflowScrolling: 'touch' }}
         >
+          {/* 
+            QUOTE BLOCK - MOVED INSIDE SCROLL AREA 
+            This ensures it scrolls away when typing!
+          */}
+          <div className="flex justify-center mb-6">
+             <div className="bg-stone-200/50 text-stone-500 text-xs px-4 py-2 rounded-lg max-w-[85%] text-center italic border border-stone-300/30">
+                引用: "{annotation.textSelection}"
+             </div>
+          </div>
+
           {messages.map((m, i) => {
-             const isLast = i === messages.length - 1;
              const isAI = m.role === 'model';
+             const isLast = i === messages.length - 1;
              return (
-              <div key={i} className={`flex w-full ${isAI ? 'justify-start' : 'justify-end'} items-start gap-3 group animate-slideUp`}>
-                {isAI && <Avatar avatar={persona.avatar} className="w-9 h-9 mt-1 shadow-sm" />}
+              <div key={i} className={`flex w-full ${isAI ? 'justify-start' : 'justify-end'} items-start gap-2`}>
+                {isAI && <Avatar avatar={persona.avatar} className="w-9 h-9 mt-0.5 rounded-lg" />}
                 
-                <div className={`relative max-w-[85%] ${isAI ? '' : ''}`}>
-                  <div 
-                    className={`px-4 py-3 text-[15px] leading-relaxed whitespace-pre-wrap shadow-sm ${
-                      isAI 
-                        ? 'bg-white text-stone-800 rounded-2xl rounded-tl-[2px] border border-stone-200/50' 
-                        : 'bg-[#95ec69] text-stone-900 rounded-2xl rounded-tr-[2px] border border-[#8ad961]' 
-                    }`}
-                    style={{ fontFamily: !isAI ? engineConfig.userFont : annotationFont }}
-                  >
-                    {m.text}
-                  </div>
-                  
-                  {isLast && isAI && !isProcessing && (
-                     <div className="absolute -right-8 top-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                       <button 
-                         onClick={handleRewrite}
-                         className="w-6 h-6 flex items-center justify-center text-stone-300 hover:text-amber-500 bg-white rounded-full shadow-sm"
-                         title="重写"
-                       >
-                         <i className="fa-solid fa-rotate-right text-xs"></i>
-                       </button>
-                     </div>
-                  )}
+                <div className={`relative max-w-[80%] min-w-[20px] px-3 py-2.5 text-[15px] leading-relaxed break-words shadow-sm
+                  ${isAI 
+                    ? 'bg-white text-stone-800 rounded-lg rounded-tl-none border border-stone-100' 
+                    : 'bg-[#95ec69] text-stone-900 rounded-lg rounded-tr-none border border-[#85d65c]'
+                  }`}
+                  style={{ fontFamily: !isAI ? engineConfig.userFont : annotationFont }}
+                >
+                  {m.text}
                 </div>
+
+                {isLast && isAI && !isProcessing && (
+                  <button onClick={handleRewrite} className="self-center text-stone-300 hover:text-amber-500 p-1">
+                    <i className="fa-solid fa-rotate-right text-xs"></i>
+                  </button>
+                )}
               </div>
              );
           })}
-          
+
           {isProcessing && (
-            <div className="flex justify-start items-start gap-3 animate-fadeIn">
-              <Avatar avatar={persona.avatar} className="w-9 h-9 mt-1" />
-              <div className="bg-white p-4 rounded-2xl rounded-tl-[2px] flex gap-1.5 border border-stone-200/50 shadow-sm items-center h-10">
-                <div className="w-1.5 h-1.5 bg-stone-400 rounded-full animate-bounce"></div>
-                <div className="w-1.5 h-1.5 bg-stone-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                <div className="w-1.5 h-1.5 bg-stone-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-              </div>
-            </div>
+             <div className="flex w-full justify-start items-start gap-2">
+               <Avatar avatar={persona.avatar} className="w-9 h-9 mt-0.5 rounded-lg" />
+               <div className="bg-white px-4 py-3 rounded-lg rounded-tl-none border border-stone-100 flex items-center gap-1">
+                 <div className="w-1.5 h-1.5 bg-stone-400 rounded-full animate-bounce"></div>
+                 <div className="w-1.5 h-1.5 bg-stone-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                 <div className="w-1.5 h-1.5 bg-stone-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+               </div>
+             </div>
           )}
           
-          {/* Spacer */}
-          <div className="h-1"></div>
+          {/* Spacer for comfortable bottom viewing */}
+          <div className="h-2"></div>
         </div>
 
-        {/* === 4. INPUT AREA (Fixed Bottom) === */}
-        {/* shrink-0: Never collapses. Sticks to bottom of container (top of keyboard). */}
-        <div className="shrink-0 bg-[#f8f8f8] sm:bg-white border-t border-stone-200 p-3 z-20 safe-area-bottom">
-          <div className="flex items-end gap-2 bg-white sm:bg-stone-50 rounded-[24px] border border-stone-200 px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-amber-500/10 focus-within:border-amber-400 transition-all">
-            <textarea 
-              id="chat-input-textarea"
-              rows={1}
-              value={input}
-              onChange={(e) => {
+        {/* === INPUT AREA (Fixed Bottom relative to flex container) === */}
+        <div className="shrink-0 bg-[#f7f7f7] border-t border-stone-200 px-4 py-3 flex items-end gap-3 z-20">
+           {/* Action Button (Left) */}
+           <button 
+             onClick={() => handleSend(false)} 
+             className={`w-9 h-9 flex items-center justify-center rounded-full transition-colors mb-0.5 shrink-0 ${canRecordOnly ? 'bg-stone-200 text-stone-600' : 'text-stone-400'}`}
+             disabled={!canRecordOnly}
+           >
+             <i className="fa-solid fa-pen-nib text-sm"></i>
+           </button>
+
+           <div className="flex-1 bg-white rounded-lg px-3 py-2 border border-stone-200 focus-within:bg-white transition-colors">
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => {
                   setInput(e.target.value);
                   e.target.style.height = 'auto';
-                  e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
-              }}
-              onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSend(true);
-                  }
-              }}
-              placeholder={isOriginal ? `告诉 ${persona.name} 你的想法...` : `回复...`}
-              className="flex-1 bg-transparent border-none py-2 px-1 focus:outline-none text-[15px] resize-none max-h-[120px]"
-              style={{ minHeight: '40px' }}
-            />
-            
-            <div className="flex items-center gap-2 pb-1.5 pr-1">
-              <button 
-                onClick={() => handleSend(false)}
-                disabled={!canRecordOnly}
-                className="w-8 h-8 flex items-center justify-center text-stone-400 hover:text-stone-600 hover:bg-stone-200 rounded-full transition-colors"
-                title="仅记录"
-              >
-                <i className="fa-solid fa-pen text-sm"></i>
-              </button>
+                  e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px';
+                }}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSend(true);
+                    }
+                }}
+                rows={1}
+                placeholder={isOriginal ? `告诉 ${persona.name} ...` : "发送消息..."}
+                className="w-full bg-transparent border-none outline-none text-[16px] resize-none max-h-[100px] py-0.5 block"
+                style={{ height: 'auto', minHeight: '24px' }}
+              />
+           </div>
 
-              <button 
-                onClick={() => handleSend(true)}
-                disabled={!canTriggerAI}
-                className="w-8 h-8 flex items-center justify-center bg-amber-500 text-white rounded-full shadow-md hover:bg-amber-600 active:scale-95 disabled:opacity-50 disabled:shadow-none disabled:bg-stone-300 transition-all"
-                title="发送"
-              >
-                <i className="fa-solid fa-paper-plane text-xs translate-x-px translate-y-px"></i>
-              </button>
-            </div>
-          </div>
+           {/* Send Button (Right) */}
+           <div className="shrink-0 mb-0.5">
+             {input.trim() || isProcessing ? (
+                <button 
+                  onClick={() => handleSend(true)}
+                  disabled={!canTriggerAI}
+                  className={`px-3 h-8 flex items-center justify-center rounded-md text-white font-bold text-sm transition-all ${canTriggerAI ? 'bg-[#07c160] active:bg-[#06ad56]' : 'bg-stone-300'}`}
+                >
+                  发送
+                </button>
+             ) : (
+                <button className="w-8 h-8 flex items-center justify-center rounded-full border border-stone-400 text-stone-600">
+                   <i className="fa-solid fa-plus"></i>
+                </button>
+             )}
+           </div>
         </div>
 
       </div>
-      <style>{`
-        .safe-area-top { padding-top: env(safe-area-inset-top); }
-        .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
-        @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .animate-slideUp { animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
-      `}</style>
     </div>
   );
 };
