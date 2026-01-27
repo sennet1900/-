@@ -122,9 +122,10 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
     if (input.trim()) {
       const userMsg = input;
       setInput('');
-      // Reset height
+      // Reset height and KEEP FOCUS
       if (inputRef.current) {
         inputRef.current.style.height = 'auto';
+        inputRef.current.focus();
       }
 
       nextHistory = [...messages, { role: 'user', text: userMsg }];
@@ -140,7 +141,10 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
     if (triggerAI) {
         onTriggerAI(input.trim() ? input : "", messages);
         setInput('');
-        if (inputRef.current) inputRef.current.style.height = 'auto';
+        if (inputRef.current) {
+            inputRef.current.style.height = 'auto';
+            inputRef.current.focus(); // Ensure keyboard stays up
+        }
     }
   };
 
@@ -181,12 +185,13 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
         }}
       >
         
-        {/* === HEADER (Fixed Height 56px) === */}
-        <div className="h-14 shrink-0 bg-[#ededed] border-b border-stone-200/50 flex items-center justify-between px-4 relative z-20 shadow-sm">
+        {/* === HEADER (Fixed Height with Safe Area) === */}
+        {/* Added dynamic padding-top for safe area */}
+        <div className="shrink-0 bg-[#ededed] border-b border-stone-200/50 flex items-center justify-between px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] relative z-20 shadow-sm transition-all">
            <button onClick={onClose} className="w-10 h-10 flex items-center justify-center -ml-2 text-stone-600">
              <i className="fa-solid fa-chevron-down text-lg"></i>
            </button>
-           <div className="font-bold text-stone-900">{persona.name}</div>
+           <div className="font-bold text-stone-900 pt-1">{persona.name}</div>
            <button className="w-10 h-10 flex items-center justify-center text-stone-600">
              <i className="fa-solid fa-ellipsis"></i>
            </button>
@@ -213,6 +218,7 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
              const isLast = i === messages.length - 1;
              return (
               <div key={i} className={`flex w-full ${isAI ? 'justify-start' : 'justify-end'} items-start gap-2`}>
+                {/* AI Avatar (Left) */}
                 {isAI && <Avatar avatar={persona.avatar} className="w-9 h-9 mt-0.5 rounded-lg" />}
                 
                 <div className={`relative max-w-[80%] min-w-[20px] px-3 py-2.5 text-[15px] leading-relaxed break-words shadow-sm
@@ -225,11 +231,15 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
                   {m.text}
                 </div>
 
+                {/* Rewrite Button for AI (Right of bubble) */}
                 {isLast && isAI && !isProcessing && (
                   <button onClick={handleRewrite} className="self-center text-stone-300 hover:text-amber-500 p-1">
                     <i className="fa-solid fa-rotate-right text-xs"></i>
                   </button>
                 )}
+
+                {/* User Avatar (Right) - NEW */}
+                {!isAI && <Avatar avatar={persona.userAvatar || '👤'} className="w-9 h-9 mt-0.5 rounded-lg" />}
               </div>
              );
           })}
@@ -250,19 +260,13 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
         </div>
 
         {/* === INPUT AREA (Fixed Bottom relative to flex container) === */}
-        <div className="shrink-0 bg-[#f7f7f7] border-t border-stone-200 px-4 py-3 flex items-end gap-3 z-20">
-           {/* Action Button (Left) */}
-           <button 
-             onClick={() => handleSend(false)} 
-             className={`w-9 h-9 flex items-center justify-center rounded-full transition-colors mb-0.5 shrink-0 ${canRecordOnly ? 'bg-stone-200 text-stone-600' : 'text-stone-400'}`}
-             disabled={!canRecordOnly}
-           >
-             <i className="fa-solid fa-pen-nib text-sm"></i>
-           </button>
-
+        <div className="shrink-0 bg-[#f7f7f7] border-t border-stone-200 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex items-end gap-3 z-20">
+           
+           {/* Text Input (Left/Center) */}
            <div className="flex-1 bg-white rounded-lg px-3 py-2 border border-stone-200 focus-within:bg-white transition-colors">
               <textarea
                 ref={inputRef}
+                autoFocus
                 value={input}
                 onChange={(e) => {
                   setInput(e.target.value);
@@ -286,6 +290,7 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
            <div className="shrink-0 mb-0.5">
              {input.trim() || isProcessing ? (
                 <button 
+                  onMouseDown={(e) => e.preventDefault()} // Prevent focus stealing
                   onClick={() => handleSend(true)}
                   disabled={!canTriggerAI}
                   className={`px-3 h-8 flex items-center justify-center rounded-md text-white font-bold text-sm transition-all ${canTriggerAI ? 'bg-[#07c160] active:bg-[#06ad56]' : 'bg-stone-300'}`}
@@ -298,6 +303,17 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
                 </button>
              )}
            </div>
+
+           {/* Pen Button (Save only) - Moved to far right */}
+           <button 
+             onMouseDown={(e) => e.preventDefault()} // Prevent focus stealing
+             onClick={() => handleSend(false)} 
+             className={`w-9 h-9 flex items-center justify-center rounded-full transition-colors mb-0.5 shrink-0 ${canRecordOnly ? 'bg-stone-200 text-stone-600' : 'text-stone-300'}`}
+             disabled={!canRecordOnly}
+             title="仅保存笔记"
+           >
+             <i className="fa-solid fa-pen-nib text-sm"></i>
+           </button>
         </div>
 
       </div>
