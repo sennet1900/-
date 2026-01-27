@@ -58,10 +58,10 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
     }
   }, [annotation.chatHistory, annotation.comment, annotation.author]);
 
-  // 1. Enhanced Body Scroll Lock (iOS Friendly)
+  // 3. JS Ultimate Body Lock (As per request)
   useEffect(() => {
     // Record current scroll position
-    const scrollY = window.scrollY;
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
 
     // Force lock the body in place
     const originalStyle = {
@@ -72,7 +72,7 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
     };
 
     document.body.style.position = 'fixed';
-    document.body.style.top = `-${scrollY}px`;
+    document.body.style.top = `-${scrollTop}px`;
     document.body.style.width = '100%';
     document.body.style.overflow = 'hidden';
 
@@ -82,11 +82,11 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
       document.body.style.top = originalStyle.top;
       document.body.style.width = originalStyle.width;
       document.body.style.overflow = originalStyle.overflow;
-      window.scrollTo(0, scrollY);
+      window.scrollTo(0, scrollTop);
     };
   }, []);
 
-  // 2. Visual Viewport Resize Handler
+  // Visual Viewport Resize Handler (Kept for correct height calc)
   const [viewportHeight, setViewportHeight] = useState('100dvh');
 
   useEffect(() => {
@@ -121,72 +121,56 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
   
   const handleSend = async (triggerAI: boolean) => {
     if (isProcessing) return;
-    
-    // Allow empty input ONLY if triggerAI is true (Reply button)
     if (!input.trim() && !triggerAI) return;
 
     let nextHistory = [...messages];
-    
-    // 1. If there is input, add it to history first
     if (input.trim()) {
       const userMsg = input;
       setInput('');
-      // Optimistic update locally (App.tsx will also update props, but this feels faster)
       nextHistory = [...messages, { role: 'user', text: userMsg }];
       setMessages(nextHistory);
-      // We don't necessarily need to call onUpdate here if onTriggerAI handles it,
-      // but for "Record Only" (triggerAI=false), we must save.
       if (!triggerAI) {
          onUpdate(annotation.id, { chatHistory: nextHistory });
       }
     } else if (triggerAI) {
-      // Input is empty, but user clicked Reply. 
       const lastMsg = nextHistory[nextHistory.length - 1];
       if (!lastMsg || lastMsg.role !== 'user') return;
     }
 
     if (triggerAI) {
-        onTriggerAI(input.trim() ? input : "", messages); // pass 'messages' which is state before optimistic update
-        // Clear input again just in case
+        onTriggerAI(input.trim() ? input : "", messages);
         setInput('');
     }
   };
 
   const handleRewrite = () => {
     if (isProcessing || messages.length === 0) return;
-    
-    // 1. Remove the last message (which should be AI's)
     const historyWithoutLast = messages.slice(0, -1);
-    
-    // 2. Update local state immediately to show it vanished
     setMessages(historyWithoutLast);
-
-    // 3. Trigger AI with this truncated history. 
-    // We pass empty string as "newMessage" so it generates response to existing history.
     onTriggerAI("", historyWithoutLast);
   };
 
-  // Determine if Send button should be enabled
   const lastMessageIsUser = messages.length > 0 && messages[messages.length - 1].role === 'user';
-  
   const canTriggerAI = !isProcessing && (input.trim().length > 0 || lastMessageIsUser);
   const canRecordOnly = !isProcessing && input.trim().length > 0;
 
   return (
-    // 3. Container Layout: 
-    // - flex-col justify-end (Bottom Sheet style for mobile)
-    // - sm:justify-center (Centered for desktop)
-    // - Height tied to Visual Viewport to avoid keyboard overlap
+    // 2. Touch Action Strategy:
+    // Outer Container: touchAction: 'none' (stops gestures), onTouchMove stopPropagation (isolates event)
     <div 
       className="fixed inset-0 z-50 flex flex-col justify-end sm:justify-center p-0 sm:p-4 bg-stone-900/40 backdrop-blur-sm transition-all duration-100 ease-out"
-      style={{ height: viewportHeight }}
+      style={{ height: viewportHeight, touchAction: 'none' }} 
+      onTouchMove={(e) => e.stopPropagation()}
     >
-      {/* 4. Modal Card:
-        - max-h-[70vh] on mobile to leave space at top
-        - rounded-t-2xl on mobile (flush bottom)
-        - mx-auto to center horizontally on larger screens
-       */}
-      <div className="bg-white w-full max-w-lg flex flex-col max-h-[70vh] sm:max-h-[85%] overflow-hidden border-t sm:border border-stone-100 rounded-t-2xl sm:rounded-2xl shadow-2xl relative animate-scaleIn mx-auto">
+      {/* 
+         Inner Container: touchAction: 'pan-y' (allows internal scroll), onTouchMove stopPropagation
+         This ensures we can scroll inside this card, but it doesn't leak out.
+      */}
+      <div 
+        className="bg-white w-full max-w-lg flex flex-col max-h-[70vh] sm:max-h-[85%] overflow-hidden border-t sm:border border-stone-100 rounded-t-2xl sm:rounded-2xl shadow-2xl relative animate-scaleIn mx-auto"
+        style={{ touchAction: 'pan-y' }}
+        onTouchMove={(e) => e.stopPropagation()}
+      >
         
         {/* Header */}
         <div className="p-4 border-b border-stone-100 flex items-center justify-between bg-stone-50/80 backdrop-blur shrink-0">
@@ -207,14 +191,11 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
           </div>
           
           <div className="flex items-center gap-3">
-             {/* User Avatar Here */}
              <div className="flex flex-col items-end mr-1">
                  <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">{persona.userIdentity || '你'}</span>
                  <Avatar avatar={persona.userAvatar || '👤'} className="w-8 h-8 text-sm" />
              </div>
-             
              <div className="h-8 w-px bg-stone-200"></div>
-
              <button onClick={onClose} className="w-8 h-8 flex items-center justify-center hover:bg-stone-200 rounded-full text-stone-400 transition-colors">
                 <i className="fa-solid fa-xmark text-lg"></i>
              </button>
@@ -232,17 +213,16 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
           </div>
         </div>
 
-        {/* Chat Area */}
+        {/* Chat Area - Scrollable */}
         <div 
           ref={scrollRef}
-          className="flex-1 overflow-y-auto p-4 space-y-6 bg-[#f2f2f2]" // Using a slight grey bg for chat feel
+          className="flex-1 overflow-y-auto p-4 space-y-6 bg-[#f2f2f2] overscroll-contain" // Added overscroll-contain
         >
           {messages.map((m, i) => {
              const isLast = i === messages.length - 1;
              const isAI = m.role === 'model';
              return (
               <div key={i} className={`flex w-full ${isAI ? 'justify-start' : 'justify-end'} items-start gap-3 group`}>
-                {/* AI Avatar (Left) */}
                 {isAI && <Avatar avatar={persona.avatar} className="w-10 h-10 text-xl mt-0.5" />}
                 
                 <div className={`relative max-w-[85%] ${isAI ? '' : ''}`}>
@@ -250,14 +230,13 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
                     className={`px-4 py-3 text-sm shadow-sm leading-relaxed whitespace-pre-wrap ${
                       isAI 
                         ? 'bg-white text-stone-800 rounded-2xl rounded-tl-[2px] border border-stone-200' 
-                        : 'bg-[#95ec69] text-stone-900 rounded-2xl rounded-tr-[2px] border border-[#8ad961]' // WeChat Green-ish
+                        : 'bg-[#95ec69] text-stone-900 rounded-2xl rounded-tr-[2px] border border-[#8ad961]' 
                     }`}
                     style={{ fontFamily: !isAI ? engineConfig.userFont : annotationFont }}
                   >
                     {m.text}
                   </div>
                   
-                  {/* Rewrite Button (Only for last message if it is AI) */}
                   {isLast && isAI && !isProcessing && (
                      <button 
                        onClick={handleRewrite}
@@ -272,7 +251,6 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
              );
           })}
           
-          {/* Loading Indicator */}
           {isProcessing && (
             <div className="flex justify-start items-start gap-3 animate-fadeIn">
               <Avatar avatar={persona.avatar} className="w-10 h-10 text-xl mt-0.5" />
@@ -293,7 +271,6 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
               value={input}
               onChange={(e) => {
                   setInput(e.target.value);
-                  // Auto-grow
                   e.target.style.height = 'auto';
                   e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
               }}
@@ -309,7 +286,6 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
             />
             
             <div className="flex items-center gap-1 pb-1">
-               {/* Record Only (Right Button) */}
               <button 
                 onClick={() => handleSend(false)}
                 disabled={!canRecordOnly}
@@ -319,7 +295,6 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
                 <i className="fa-solid fa-pen text-xs"></i>
               </button>
 
-              {/* Send and Reply (Left Button) */}
               <button 
                 onClick={() => handleSend(true)}
                 disabled={!canTriggerAI}
