@@ -171,12 +171,19 @@ const AnnotationModal: React.FC<AnnotationActionModalProps> = ({
       <div className="hidden sm:block absolute inset-0" onClick={onClose}></div>
 
       {/* 
+         MOBILE BACKDROP CURTAIN 
+         This static fixed div ensures that when the keyboard animates and resizing lags, 
+         the user sees a solid background instead of the underlying book/page flickering through.
+      */}
+      <div className="sm:hidden fixed inset-0 bg-[#ededed] z-0"></div>
+
+      {/* 
          THE MAIN CONTAINER 
          Mobile: Strictly controlled by JS height/top to match VisualViewport.
          Desktop: Standard centered modal.
       */}
       <div 
-        className="fixed sm:relative bg-[#ededed] w-full sm:w-[450px] sm:h-[800px] sm:max-h-[85vh] sm:rounded-2xl sm:shadow-2xl flex flex-col overflow-hidden"
+        className="fixed sm:relative bg-[#ededed] w-full sm:w-[450px] sm:h-[800px] sm:max-h-[85vh] sm:rounded-2xl sm:shadow-2xl flex flex-col overflow-hidden z-10"
         style={{
           // MOBILE ONLY STYLES (overridden by sm: styles above)
           height: window.innerWidth < 640 ? `${viewportHeight}px` : undefined,
